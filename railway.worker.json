@@ -1,0 +1,10 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "pip install uv && uv sync --frozen --no-dev"
+  },
+  "deploy": {
+    "startCommand": ".venv/bin/python -m src.worker.index",
+    "restartPolicyType": "ALWAYS"
+  }
+}

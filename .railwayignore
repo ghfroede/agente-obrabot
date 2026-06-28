@@ -1,0 +1,15 @@
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/
+docs/
+dev/
+*.md
+!README.md
+docker-compose.yml
+.env
+.env.local
+dev/
