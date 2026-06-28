@@ -100,4 +100,4 @@ Documentação detalhada: `docs/railway-deploy-plan.md` e `docs/operations.md`.
 
 ## Licença
 
-Uso interno — Construtora AgentOS.
+MIT — veja [LICENSE](LICENSE).
