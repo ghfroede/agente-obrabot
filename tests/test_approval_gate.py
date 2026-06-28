@@ -1,0 +1,186 @@
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, date, datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from src.core.constants import DocumentStatus
+from src.core.errors import ApprovalRequiredError, BucketConflictError
+from src.db.models import Aprovacao, Documento, Obra
+from src.services import bucket_service, rdo_service
+
+
+def test_bucket_taxonomy_keys() -> None:
+    entrada = bucket_service.build_entrada_bruta_key(
+        "OBRA-001", "evt-1", slug="obra-teste", message_id=42
+    )
+    assert entrada.startswith("obras/OBRA-001-obra-teste/01_entrada_bruta/telegram/")
+    assert "msg_42" in entrada
+
+    triagem = bucket_service.build_triagem_key("OBRA-001", "t1", slug="obra-teste")
+    assert "/02_triagem/classificacoes/" in triagem
+
+    foto = bucket_service.build_arquivo_key(
+        "OBRA-001", "foto", "a" * 64, "jpg", slug="obra-teste", data_ref="2026-06-27"
+    )
+    assert foto == "obras/OBRA-001-obra-teste/06_fotos/brutas/2026-06-27/aaaaaaaaaaaaaaaa.jpg"
+
+    rdo_draft = bucket_service.build_rdo_key(
+        "OBRA-001", "2026-06-27", "REV00", "rdo.html", slug="obra-teste", draft=True
+    )
+    assert "/05_RDO/rascunhos/" in rdo_draft
+
+    rdo_final = bucket_service.build_rdo_key(
+        "OBRA-001", "2026-06-27", "REV00", "rdo.pdf", slug="obra-teste", draft=False
+    )
+    assert "/05_RDO/finalizados_pdf/" in rdo_final
+
+
+def _bucket_settings(local_path: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        s3_configured=False,
+        local_bucket_path=local_path,
+        s3_bucket_name="test-bucket",
+    )
+
+
+def test_final_overwrite_blocked(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "src.services.bucket_service.get_settings",
+        lambda: _bucket_settings(str(tmp_path / "bucket")),
+    )
+    key = "test/final.pdf"
+    bucket_service.put_bytes(key, b"v1", allow_overwrite=False)
+    with pytest.raises(BucketConflictError):
+        bucket_service.put_bytes(key, b"v2", allow_overwrite=False)
+
+
+@pytest.mark.asyncio
+async def test_finalize_blocked_when_not_approved() -> None:
+    doc_id = uuid.uuid4()
+    doc = Documento(
+        id=doc_id,
+        obra_id="OBRA-001",
+        tipo="rdo",
+        titulo="RDO",
+        data_ref=date(2026, 6, 27),
+        revisao="REV00",
+        status=DocumentStatus.RASCUNHO_GERADO,
+        bucket_key="draft.html",
+    )
+    session = AsyncMock()
+    doc_result = MagicMock()
+    doc_result.scalar_one_or_none.return_value = doc
+    session.execute = AsyncMock(return_value=doc_result)
+
+    with pytest.raises(ApprovalRequiredError, match="APROVADO"):
+        await rdo_service.finalize_rdo(
+            session, documento_id=str(doc_id), aprovador="engenheiro"
+        )
+
+
+@pytest.mark.asyncio
+async def test_finalize_blocked_without_approval_record() -> None:
+    doc_id = uuid.uuid4()
+    doc = Documento(
+        id=doc_id,
+        obra_id="OBRA-001",
+        tipo="rdo",
+        titulo="RDO",
+        data_ref=date(2026, 6, 27),
+        revisao="REV00",
+        status=DocumentStatus.APROVADO,
+        bucket_key="draft.html",
+    )
+    session = AsyncMock()
+    calls = 0
+
+    async def fake_execute(stmt: object) -> MagicMock:
+        nonlocal calls
+        calls += 1
+        result = MagicMock()
+        if calls == 1:
+            result.scalar_one_or_none.return_value = doc
+        else:
+            result.scalar_one_or_none.return_value = None
+        return result
+
+    session.execute = fake_execute
+
+    with pytest.raises(ApprovalRequiredError, match="aprovação humana"):
+        await rdo_service.finalize_rdo(
+            session, documento_id=str(doc_id), aprovador="engenheiro"
+        )
+
+
+@pytest.mark.asyncio
+async def test_finalize_generates_pdf_when_approved(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    doc_id = uuid.uuid4()
+    obra = Obra(id="OBRA-001", nome="Teste", slug="obra-teste")
+    doc = Documento(
+        id=doc_id,
+        obra_id="OBRA-001",
+        tipo="rdo",
+        titulo="RDO",
+        data_ref=date(2026, 6, 27),
+        revisao="REV00",
+        status=DocumentStatus.APROVADO,
+        bucket_key="obras/OBRA-001-obra-teste/05_RDO/rascunhos/2026-06-27/REV00/draft.html",
+    )
+    approval = Aprovacao(
+        documento_id=doc_id,
+        aprovador="engenheiro",
+        aprovado=True,
+        created_at=datetime(2026, 6, 27, 12, 0, tzinfo=UTC),
+    )
+
+    session = AsyncMock()
+    calls = 0
+
+    async def fake_execute(_stmt: object) -> MagicMock:
+        nonlocal calls
+        calls += 1
+        result = MagicMock()
+        if calls == 1:
+            result.scalar_one_or_none.return_value = doc
+        elif calls == 2:
+            result.scalar_one_or_none.return_value = approval
+        else:
+            result.scalar_one_or_none.return_value = obra
+        return result
+
+    session.execute = fake_execute
+    session.commit = AsyncMock()
+
+    monkeypatch.setattr(
+        "src.services.bucket_service.get_settings",
+        lambda: SimpleNamespace(
+            s3_configured=False,
+            local_bucket_path=str(tmp_path / "bucket"),
+            s3_bucket_name="test-bucket",
+            templates_dir="src/templates",
+        ),
+    )
+    monkeypatch.setattr(
+        bucket_service,
+        "get_bytes",
+        lambda _k: b"<html><body><h1>RDO</h1></body></html>",
+    )
+    monkeypatch.setattr(
+        "src.services.pdf_service.html_to_pdf",
+        lambda _html: b"%PDF-1.4 smoke",
+    )
+
+    with patch("src.services.rdo_service.audit_service.log_event", new_callable=AsyncMock):
+        result = await rdo_service.finalize_rdo(
+            session, documento_id=str(doc_id), aprovador="engenheiro"
+        )
+
+    assert result["formato"] == "pdf"
+    assert result["status"] == DocumentStatus.FINALIZADO_VALIDADO.value
+    assert "finalizados_pdf" in (doc.bucket_key or "")

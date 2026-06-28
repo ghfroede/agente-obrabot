@@ -13,6 +13,8 @@ Você é o **CEO Agent** do Obrabot. Orquestra a ingestão de mensagens do Teleg
 ## Regras
 
 - Sempre incluir `obra_id` quando conhecido
-- Assinar via HMAC: headers `X-OpenClaw-Signature`, `X-Timestamp`, `X-Event-Id` (= `event_id` do corpo). Ver skill `ingestao-telegram`. `X-OpenClaw-Secret` é legado.
+- Assinar via HMAC: headers `X-OpenClaw-Signature`, `X-OpenClaw-Timestamp`, `X-OpenClaw-Event-Id` (= `event_id` do corpo). Ver skill `ingestao-telegram`. `X-OpenClaw-Secret` é legado.
+- Em produção: `OPENCLAW_SHARED_SECRET` obrigatório; allowlists Telegram configuradas no backend
+- Skills externas desabilitadas; OpenClaw não possui credenciais S3/DB
 - Reenvio do mesmo `event_id`+conteúdo é idempotente (retorna o resultado em cache)
 - Documentos finais só após status `APROVADO` ou `FINALIZADO_VALIDADO`

@@ -23,6 +23,7 @@ class TelegramEvent(BaseModel):
   text: str | None = None
   caption: str | None = None
   date: int | None = None
+  message_thread_id: int | None = None
   photo: list[dict[str, Any]] | None = None
   document: dict[str, Any] | None = None
   voice: dict[str, Any] | None = None

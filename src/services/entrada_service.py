@@ -168,18 +168,25 @@ async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, An
 
     # 1. Persiste raw no bucket (FONTE DE VERDADE) ANTES da IA.
     envelope = entrada.raw_payload or {"text": entrada.text}
+    message_id = None
+    telegram = envelope.get("telegram")
+    if isinstance(telegram, dict):
+        message_id = telegram.get("message_id")
+
     bucket_key, bucket_uri = bucket_service.persist_entrada_bruta(
         obra_id=obra.id,
         event_id=entrada.event_id or str(entrada.id),
         envelope={"entrada_id": str(entrada.id), "source": entrada.source, **envelope},
         source=entrada.source,
+        slug=obra.slug,
+        message_id=message_id,
     )
     entrada.storage_key = bucket_key
     entrada.storage_uri = bucket_uri
 
     # 2. Mídia (foto/áudio/documento): baixa do Telegram, persiste Arquivo e roda
     #    visão/transcrição. Falha de uma mídia degrada — o raw já é fonte de verdade.
-    midias = await _process_media(session, entrada, obra.id)
+    midias = await _process_media(session, entrada, obra.id, slug=obra.slug)
 
     # 3. Triagem (DEPOIS de persistir) — texto enriquecido com descrição/transcrição.
     text = _compose_triagem_text(entrada.text, midias)
@@ -206,6 +213,12 @@ async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, An
     await session.flush()
     triagem_row = await ingestao_service.save_triagem(
         session, obra_id=obra.id, output=triagem, documento_id=doc.id
+    )
+    bucket_service.persist_triagem_json(
+        obra_id=obra.id,
+        triagem_id=str(triagem_row.id),
+        payload=triagem.model_dump(),
+        slug=obra.slug,
     )
     await audit_service.log_event(
         session,
@@ -239,7 +252,7 @@ async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, An
 
 
 async def _process_media(
-    session: AsyncSession, entrada: EntradaBruta, obra_id: str
+    session: AsyncSession, entrada: EntradaBruta, obra_id: str, *, slug: str | None = None
 ) -> list[dict[str, Any]]:
     """Baixa e persiste mídias do payload Telegram (foto/áudio/documento)."""
     raw = entrada.raw_payload or {}
@@ -263,6 +276,7 @@ async def _process_media(
                 data=data,
                 telegram_message_id=tg_msg_id,
                 data_ref=data_ref,
+                slug=slug,
             )
         except Exception as exc:
             # Degrada por mídia — não derruba a entrada (raw já persistido).

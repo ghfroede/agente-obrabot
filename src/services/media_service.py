@@ -20,11 +20,20 @@ async def persist_arquivo(
     ref: MediaRef,
     data: bytes,
     telegram_message_id: uuid.UUID | None = None,
+    slug: str | None = None,
+    data_ref: str | None = None,
 ) -> Arquivo:
     """Calcula hash, grava o binário no bucket (raw) e cria a linha ``Arquivo``."""
     file_hash = sha256_hex(data)
     ext = file_ext(ref)
-    key = bucket_service.build_arquivo_key(obra_id, ref.kind, file_hash, ext)
+    key = bucket_service.build_arquivo_key(
+        obra_id,
+        ref.kind,
+        file_hash,
+        ext,
+        slug=slug,
+        data_ref=data_ref,
+    )
     uri = bucket_service.put_bytes(
         key, data, content_type=ref.mime_type or "application/octet-stream"
     )
@@ -53,6 +62,7 @@ async def ingest_media(
     data: bytes,
     telegram_message_id: uuid.UUID | None = None,
     data_ref: date | None = None,
+    slug: str | None = None,
 ) -> dict[str, Any]:
     """Persiste a mídia (Arquivo) e deriva o registro de domínio + IA por tipo.
 
@@ -70,6 +80,8 @@ async def ingest_media(
         ref=ref,
         data=data,
         telegram_message_id=telegram_message_id,
+        slug=slug,
+        data_ref=data_ref.isoformat() if data_ref else None,
     )
     summary: dict[str, Any] = {
         "kind": ref.kind,

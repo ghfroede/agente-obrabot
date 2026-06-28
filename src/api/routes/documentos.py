@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_db
-from src.core.errors import NotFoundError
+from src.core.errors import ApprovalRequiredError, NotFoundError
 from src.db.models import Documento
 from src.schemas.domain import ApprovalRequest, RdoApproveRequest, RdoDraftRequest
 from src.services import approval_service, rdo_service
@@ -28,6 +28,8 @@ async def rdo_rascunho(
         )
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ApprovalRequiredError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/rdo/finalizar")
@@ -43,6 +45,8 @@ async def rdo_finalizar(
         )
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ApprovalRequiredError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/aprovacoes")
@@ -60,6 +64,8 @@ async def aprovar(
         )
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ApprovalRequiredError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/documentos/{documento_id}")

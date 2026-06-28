@@ -151,7 +151,12 @@ def cleanup_db(obra_id: str, *, dry_run: bool) -> dict[str, int]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Limpa dados de teste de uma obra.")
-    parser.add_argument("obra_id", default="OBRA-TESTE", nargs="?", help="ID da obra (default: OBRA-TESTE)")
+    parser.add_argument(
+        "obra_id",
+        default="OBRA-TESTE",
+        nargs="?",
+        help="ID da obra (default: OBRA-TESTE)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Apenas listar o que seria removido")
     args = parser.parse_args()
 

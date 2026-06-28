@@ -23,6 +23,7 @@ dependencies = [
     "python-slugify>=8.0.4",
     "tenacity>=9.0.0",
     "pandas>=2.2.3",
+    "xhtml2pdf>=0.2.16",
 ]
 
 [dependency-groups]

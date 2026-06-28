@@ -16,16 +16,37 @@ SECRET = "testsecret"
 PATH = "/api/v1/openclaw/telegram-event"
 
 
-def _settings(secret: str = SECRET) -> SimpleNamespace:
-    return SimpleNamespace(openclaw_shared_secret=secret)
+def _settings(
+    secret: str = SECRET,
+    *,
+    production: bool = False,
+    require_hmac: bool = False,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        openclaw_shared_secret=secret,
+        is_production=production,
+        openclaw_require_hmac=require_hmac,
+        openclaw_max_clock_skew_seconds=300,
+        webhook_max_body_bytes=10_485_760,
+        rate_limit_enabled=False,
+        allowed_chat_ids=frozenset(),
+        allowed_user_ids=frozenset(),
+        allowed_thread_ids=frozenset(),
+    )
 
 
-def _make_request(body: bytes, method: str = "POST", path: str = PATH) -> Request:
+def _make_request(
+    body: bytes,
+    method: str = "POST",
+    path: str = PATH,
+    headers: dict[str, str] | None = None,
+) -> Request:
+    hdrs = [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()]
     scope = {
         "type": "http",
         "method": method,
         "path": path,
-        "headers": [],
+        "headers": hdrs,
         "query_string": b"",
     }
 
@@ -45,63 +66,76 @@ def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _auth_headers(secret: str, event_id: str, body: bytes, ts: str | None = None) -> dict[str, str]:
+    timestamp = ts or _now()
+    sig = _sign(secret, timestamp, event_id, body)
+    return {
+        "X-OpenClaw-Signature": sig,
+        "X-OpenClaw-Timestamp": timestamp,
+        "X-OpenClaw-Event-Id": event_id,
+    }
+
+
 async def test_valid_signature_passes(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(security, "get_settings", _settings)
+    monkeypatch.setattr(security, "get_settings", lambda: _settings(require_hmac=True))
+    monkeypatch.setattr(security.rate_limit_service, "check_openclaw_limits", lambda **_k: None)
     event_id = "evt-1"
     body = json.dumps({"event_id": event_id, "obra_id": "OBRA-001"}).encode()
-    ts = _now()
-    sig = _sign(SECRET, ts, event_id, body)
-    request = _make_request(body)
-    # Não deve levantar exceção.
-    await security.verify_hmac_signature(sig, ts, event_id, request=request)
+    request = _make_request(body, headers=_auth_headers(SECRET, event_id, body))
+    await security.verify_openclaw_webhook(request)
 
 
 async def test_invalid_signature_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(security, "get_settings", _settings)
+    monkeypatch.setattr(security, "get_settings", lambda: _settings(require_hmac=True))
     event_id = "evt-1"
     body = json.dumps({"event_id": event_id}).encode()
-    ts = _now()
-    request = _make_request(body)
+    headers = _auth_headers(SECRET, event_id, body)
+    headers["X-OpenClaw-Signature"] = "deadbeef"
+    request = _make_request(body, headers=headers)
     with pytest.raises(HTTPException) as exc:
-        await security.verify_hmac_signature("deadbeef", ts, event_id, request=request)
+        await security.verify_openclaw_webhook(request)
     assert exc.value.status_code == 401
 
 
 async def test_expired_timestamp_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(security, "get_settings", _settings)
+    monkeypatch.setattr(security, "get_settings", lambda: _settings(require_hmac=True))
     event_id = "evt-1"
     body = json.dumps({"event_id": event_id}).encode()
     old = (datetime.now(UTC) - timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    sig = _sign(SECRET, old, event_id, body)
-    request = _make_request(body)
+    request = _make_request(body, headers=_auth_headers(SECRET, event_id, body, ts=old))
     with pytest.raises(HTTPException) as exc:
-        await security.verify_hmac_signature(sig, old, event_id, request=request)
+        await security.verify_openclaw_webhook(request)
     assert exc.value.status_code == 401
 
 
 async def test_missing_header_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(security, "get_settings", _settings)
+    monkeypatch.setattr(security, "get_settings", lambda: _settings(require_hmac=True))
     body = json.dumps({"event_id": "evt-1"}).encode()
     request = _make_request(body)
     with pytest.raises(HTTPException) as exc:
-        await security.verify_hmac_signature(None, _now(), None, request=request)
+        await security.verify_openclaw_webhook(request)
     assert exc.value.status_code == 401
 
 
 async def test_event_id_mismatch_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(security, "get_settings", _settings)
+    monkeypatch.setattr(security, "get_settings", lambda: _settings(require_hmac=True))
     body = json.dumps({"event_id": "evt-payload"}).encode()
     ts = _now()
-    # Assina com o event_id do header (assinatura válida), mas header != payload.
-    sig = _sign(SECRET, ts, "evt-header", body)
-    request = _make_request(body)
+    headers = _auth_headers(SECRET, "evt-header", body, ts=ts)
+    request = _make_request(body, headers=headers)
     with pytest.raises(HTTPException) as exc:
-        await security.verify_hmac_signature(sig, ts, "evt-header", request=request)
+        await security.verify_openclaw_webhook(request)
     assert exc.value.status_code == 401
 
 
 async def test_no_secret_is_noop(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(security, "get_settings", lambda: _settings(""))
     request = _make_request(b"{}")
-    # Sem segredo configurado, a verificação é ignorada (dev).
-    await security.verify_hmac_signature(None, None, None, request=request)
+    body = await security.verify_openclaw_webhook(request)
+    assert body == b"{}"
+
+
+async def test_verify_hmac_signature_compat(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(security, "get_settings", lambda: _settings(""))
+    request = _make_request(b"{}")
+    await security.verify_hmac_signature(request)

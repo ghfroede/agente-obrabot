@@ -42,20 +42,75 @@ def _uri(key: str) -> str:
     return f"s3://{settings.s3_bucket_name}/{key}"
 
 
-def build_entrada_bruta_key(obra_id: str, event_id: str, source: str = "telegram") -> str:
+def obra_storage_prefix(obra_id: str, slug: str | None = None) -> str:
+    """Prefixo oficial: obras/{obra_id}-{slug}/"""
+    if slug:
+        return f"obras/{obra_id}-{slug}"
+    return f"obras/{obra_id}"
+
+
+def build_entrada_bruta_key(
+    obra_id: str,
+    event_id: str,
+    *,
+    slug: str | None = None,
+    source: str = "telegram",
+    message_id: int | None = None,
+) -> str:
     now = datetime.now(UTC)
+    prefix = obra_storage_prefix(obra_id, slug)
+    leaf = f"msg_{message_id}" if message_id is not None else f"evt_{event_id}"
     return (
-        f"obras/{obra_id}/01_entrada_bruta/{source}/"
-        f"{now.year}/{now.month:02d}/{now.day:02d}/evt_{event_id}/envelope.json"
+        f"{prefix}/01_entrada_bruta/{source}/"
+        f"{now.year}/{now.month:02d}/{now.day:02d}/{leaf}/envelope.json"
     )
 
 
-def build_arquivo_key(obra_id: str, tipo: str, file_hash: str, ext: str) -> str:
+def build_triagem_key(obra_id: str, triagem_id: str, *, slug: str | None = None) -> str:
+    now = datetime.now(UTC)
+    prefix = obra_storage_prefix(obra_id, slug)
+    return (
+        f"{prefix}/02_triagem/classificacoes/"
+        f"{now.year}/{now.month:02d}/{now.day:02d}/triagem_{triagem_id}.json"
+    )
+
+
+def build_transcricao_key(obra_id: str, audio_id: str, *, slug: str | None = None) -> str:
+    prefix = obra_storage_prefix(obra_id, slug)
+    return f"{prefix}/02_triagem/transcricoes_audio/{audio_id}.json"
+
+
+def build_arquivo_key(
+    obra_id: str,
+    tipo: str,
+    file_hash: str,
+    ext: str,
+    *,
+    slug: str | None = None,
+    data_ref: str | None = None,
+) -> str:
+    prefix = obra_storage_prefix(obra_id, slug)
+    if tipo == "foto" and data_ref:
+        return f"{prefix}/06_fotos/brutas/{data_ref}/{file_hash[:16]}.{ext.lstrip('.')}"
     now = datetime.now(UTC)
     return (
-        f"obras/{obra_id}/02_arquivos/{tipo}/"
+        f"{prefix}/02_arquivos/{tipo}/"
         f"{now.year}/{now.month:02d}/{file_hash[:16]}.{ext.lstrip('.')}"
     )
+
+
+def build_rdo_key(
+    obra_id: str,
+    data_ref: str,
+    revisao: str,
+    filename: str,
+    *,
+    slug: str | None = None,
+    draft: bool = True,
+) -> str:
+    prefix = obra_storage_prefix(obra_id, slug)
+    area = "rascunhos" if draft else "finalizados_pdf"
+    return f"{prefix}/05_RDO/{area}/{data_ref}/{revisao}/{filename}"
 
 
 def build_documento_key(
@@ -65,10 +120,16 @@ def build_documento_key(
     revisao: str,
     filename: str,
     *,
+    slug: str | None = None,
     draft: bool = True,
 ) -> str:
+    if tipo == "rdo":
+        return build_rdo_key(
+            obra_id, data_ref, revisao, filename, slug=slug, draft=draft
+        )
+    prefix = obra_storage_prefix(obra_id, slug)
     area = "03_rascunhos" if draft else "04_documentos_finais"
-    return f"obras/{obra_id}/{area}/{tipo}/{data_ref}/{revisao}/{filename}"
+    return f"{prefix}/{area}/{tipo}/{data_ref}/{revisao}/{filename}"
 
 
 def build_metadata_key(documento_key: str) -> str:
@@ -87,6 +148,10 @@ def _object_exists(key: str) -> bool:
         except ClientError:
             return False
     return (_local_root() / key).exists()
+
+
+def head_object(key: str) -> bool:
+    return _object_exists(key)
 
 
 def put_bytes(
@@ -136,8 +201,12 @@ def persist_entrada_bruta(
     event_id: str,
     envelope: dict[str, Any],
     source: str = "telegram",
+    slug: str | None = None,
+    message_id: int | None = None,
 ) -> tuple[str, str]:
-    key = build_entrada_bruta_key(obra_id, event_id, source)
+    key = build_entrada_bruta_key(
+        obra_id, event_id, slug=slug, source=source, message_id=message_id
+    )
     envelope = {
         **envelope,
         "schema_version": SCHEMA_VERSION,
@@ -150,12 +219,23 @@ def persist_entrada_bruta(
     return key, uri
 
 
+def persist_triagem_json(
+    *,
+    obra_id: str,
+    triagem_id: str,
+    payload: dict[str, Any],
+    slug: str | None = None,
+) -> str:
+    key = build_triagem_key(obra_id, triagem_id, slug=slug)
+    return put_json(key, payload)
+
+
 def persist_sidecar_metadata(documento_key: str, metadata: dict[str, Any]) -> str:
     meta_key = build_metadata_key(documento_key)
-    payload = {
+    body = {
         **metadata,
         "schema_version": SCHEMA_VERSION,
         "generated_by": GENERATED_BY,
         "documento_key": documento_key,
     }
-    return put_json(meta_key, payload)
+    return put_json(meta_key, body)

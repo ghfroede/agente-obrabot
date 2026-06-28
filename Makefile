@@ -1,4 +1,4 @@
-.PHONY: dev dev-api dev-worker build start-api start-worker test lint typecheck db-migrate install sync
+.PHONY: dev dev-api dev-worker build start-api start-worker test lint typecheck db-migrate install sync smoke-s3 smoke-api smoke-openclaw
 
 UV ?= uv
 
@@ -34,3 +34,12 @@ typecheck:
 
 db-migrate:
 	$(UV) run alembic upgrade head
+
+smoke-s3:
+	PYTHONPATH=. $(UV) run python scripts/smoke_s3.py
+
+smoke-api:
+	$(UV) run python scripts/smoke_api.py $(BASE_URL)
+
+smoke-openclaw:
+	$(UV) run python scripts/smoke_openclaw.py $(BASE_URL)

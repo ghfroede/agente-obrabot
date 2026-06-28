@@ -17,7 +17,14 @@ from src.api.routes.orcamento import router as orcamento_router
 from src.api.routes.tasks import router as tasks_router
 from src.api.routes.triagem import router as triagem_router
 from src.config.env import get_settings
-from src.core.errors import NotFoundError, ObrabotError, UnauthorizedError
+from src.core.errors import (
+    ApprovalRequiredError,
+    ForbiddenError,
+    NotFoundError,
+    ObrabotError,
+    RateLimitError,
+    UnauthorizedError,
+)
 
 
 @asynccontextmanager
@@ -52,6 +59,18 @@ def create_app() -> FastAPI:
     @app.exception_handler(UnauthorizedError)
     async def unauthorized_handler(_request: Request, exc: UnauthorizedError) -> JSONResponse:
         return JSONResponse(status_code=401, content={"detail": str(exc)})
+
+    @app.exception_handler(ForbiddenError)
+    async def forbidden_handler(_request: Request, exc: ForbiddenError) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": str(exc)})
+
+    @app.exception_handler(RateLimitError)
+    async def rate_limit_handler(_request: Request, exc: RateLimitError) -> JSONResponse:
+        return JSONResponse(status_code=429, content={"detail": str(exc)})
+
+    @app.exception_handler(ApprovalRequiredError)
+    async def approval_handler(_request: Request, exc: ApprovalRequiredError) -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
 
     @app.exception_handler(ObrabotError)
     async def obrabot_error_handler(_request: Request, exc: ObrabotError) -> JSONResponse:

@@ -1,0 +1,38 @@
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "webhookUrl": "${OBRABOT_API_URL}/api/v1/openclaw/telegram-event",
+      "allowedChatIds": "${TELEGRAM_ALLOWED_CHAT_IDS}",
+      "allowedUserIds": "${TELEGRAM_ALLOWED_USER_IDS}",
+      "allowedThreadIds": "${TELEGRAM_ALLOWED_THREAD_IDS}"
+    }
+  },
+  "skills": {
+    "paths": ["./openclaw/skills"],
+    "allowExternal": false
+  },
+  "agents": {
+    "ceo": {
+      "workspace": "./openclaw/agents/ceo",
+      "model": "${OPENAI_MODEL}",
+      "skills": ["ingestao-telegram", "triagem-obra"]
+    }
+  },
+  "backend": {
+    "baseUrl": "${OBRABOT_API_URL}",
+    "hmac": {
+      "enabled": true,
+      "secret": "${OPENCLAW_SHARED_SECRET}",
+      "signatureHeader": "X-OpenClaw-Signature",
+      "timestampHeader": "X-OpenClaw-Timestamp",
+      "eventIdHeader": "X-OpenClaw-Event-Id"
+    }
+  },
+  "security": {
+    "noDatabaseCredentials": true,
+    "noS3Credentials": true,
+    "noExternalSkills": true
+  }
+}

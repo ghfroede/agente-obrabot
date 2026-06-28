@@ -14,6 +14,14 @@ class UnauthorizedError(ObrabotError):
     pass
 
 
+class ForbiddenError(ObrabotError):
+    pass
+
+
+class RateLimitError(ObrabotError):
+    pass
+
+
 class BucketConflictError(ObrabotError):
     """Documento final já existe no bucket."""
 

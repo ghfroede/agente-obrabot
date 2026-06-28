@@ -16,11 +16,11 @@ POST {OBRABOT_API_URL}/api/v1/openclaw/telegram-event
 ```
 Content-Type: application/json
 X-OpenClaw-Signature: {hmac_sha256_hex}
-X-Timestamp: {iso8601_utc}        # ex.: 2026-06-28T12:00:00Z (janela de ±5 min)
-X-Event-Id: {event_id}            # DEVE ser igual ao event_id do corpo
+X-OpenClaw-Timestamp: {iso8601_utc}        # ex.: 2026-06-28T12:00:00Z (janela de ±5 min)
+X-OpenClaw-Event-Id: {event_id}            # DEVE ser igual ao event_id do corpo
 ```
 
-`X-OpenClaw-Secret` (segredo estático) é **legado** — use apenas em ambientes sem HMAC.
+Headers legados aceitos: `X-Timestamp`, `X-Event-Id`. `X-OpenClaw-Secret` (segredo estático) é **legado** — use apenas em ambientes sem HMAC.
 
 ## Cálculo da assinatura
 

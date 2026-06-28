@@ -3,9 +3,16 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _parse_csv_ids(value: str) -> frozenset[str]:
+    if not value.strip():
+        return frozenset()
+    return frozenset(part.strip() for part in value.split(",") if part.strip())
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+    app_env: str = "development"
     node_env: str = "development"
     agent_name: str = "Obrabot"
     agent_system_prompt: str = (
@@ -30,10 +37,26 @@ class Settings(BaseSettings):
         return url
 
     openclaw_shared_secret: str = ""
+    openclaw_require_hmac: bool = False
+    openclaw_max_clock_skew_seconds: int = 300
+    webhook_max_body_bytes: int = 10_485_760
 
     telegram_bot_token: str = ""
     telegram_api_base: str = "https://api.telegram.org"
     telegram_reply_enabled: bool = False
+    telegram_allowed_chat_ids: str = ""
+    telegram_allowed_user_ids: str = ""
+    telegram_allowed_thread_ids: str = ""
+
+    enable_telegram_file_download: bool = True
+    max_image_bytes: int = 10_485_760
+    max_audio_bytes: int = 26_214_400
+    max_document_bytes: int = 52_428_800
+
+    rate_limit_enabled: bool = True
+    rate_limit_user_per_minute: int = 30
+    rate_limit_chat_per_minute: int = 120
+    rate_limit_window_seconds: int = 60
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
@@ -50,6 +73,22 @@ class Settings(BaseSettings):
     s3_secret_access_key: str = ""
     s3_bucket_name: str = "bucket-construtora"
     s3_region: str = "us-east-1"
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.lower() == "production" or self.node_env.lower() == "production"
+
+    @property
+    def allowed_chat_ids(self) -> frozenset[str]:
+        return _parse_csv_ids(self.telegram_allowed_chat_ids)
+
+    @property
+    def allowed_user_ids(self) -> frozenset[str]:
+        return _parse_csv_ids(self.telegram_allowed_user_ids)
+
+    @property
+    def allowed_thread_ids(self) -> frozenset[str]:
+        return _parse_csv_ids(self.telegram_allowed_thread_ids)
 
     @property
     def sync_database_url(self) -> str:
