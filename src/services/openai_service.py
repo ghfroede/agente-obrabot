@@ -59,23 +59,25 @@ async def triagem_structured(text: str, *, context: dict[str, Any] | None = None
 
     settings = get_settings()
     user_content = json.dumps({"texto": text, "contexto": context or {}}, ensure_ascii=False)
-    response = await client.beta.chat.completions.parse(
+    # JSON mode (não estrito) em vez de Structured Outputs: TriagemOutput tem
+    # campos_extraidos: dict[str, Any] (objeto open-ended), que o modo estrito recusa
+    # (exige additionalProperties=false). Passamos o schema no prompt e validamos manualmente.
+    schema_hint = json.dumps(TriagemOutput.model_json_schema(), ensure_ascii=False)
+    system_content = f"{TRIAGEM_SYSTEM}\n\nResponda APENAS com JSON do schema:\n{schema_hint}"
+    response = await client.chat.completions.create(
         model=settings.openai_model,
         messages=[
-            {"role": "system", "content": TRIAGEM_SYSTEM},
+            {"role": "system", "content": system_content},
             {"role": "user", "content": user_content},
         ],
-        response_format=TriagemOutput,
+        response_format={"type": "json_object"},
         temperature=0.1,
     )
-    parsed = response.choices[0].message.parsed
-    if parsed is None:
-        raw = response.choices[0].message.content or "{}"
-        if raw.startswith("```"):
-            raw = re.sub(r"^```(?:json)?\n?", "", raw.strip())
-            raw = re.sub(r"\n?```$", "", raw)
-        return TriagemOutput.model_validate_json(raw)
-    return parsed
+    raw = response.choices[0].message.content or "{}"
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\n?", "", raw.strip())
+        raw = re.sub(r"\n?```$", "", raw)
+    return TriagemOutput.model_validate_json(raw)
 
 
 async def transcribe_audio(file_bytes: bytes, filename: str = "audio.ogg") -> str:
