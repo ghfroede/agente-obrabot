@@ -1,5 +1,6 @@
 from __future__ import annotations
-
+import hashlib
+import json
 import uuid
 from typing import Any
 
@@ -8,11 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.env import get_settings
 from src.core.constants import DocumentStatus
-from src.db.models import Documento, Obra, TelegramMessage, Triagem
+from src.db.models import Documento, Obra, TelegramMessage, Triagem, IdempotencyKey
 from src.schemas.domain import OpenClawTelegramPayload, TriagemOutput
 from src.services import audit_service, bucket_service, openai_service
 from src.utils.filenames import obra_slug
-
 
 async def ensure_obra(
     session: AsyncSession,
@@ -34,7 +34,6 @@ async def ensure_obra(
         obra.nome = nome
         obra.slug = obra_slug(nome)
     return obra
-
 
 async def save_triagem(
     session: AsyncSession,
@@ -60,19 +59,81 @@ async def save_triagem(
     await session.flush()
     return row
 
+async def check_idempotency(
+    session: AsyncSession,
+    event_id: str,
+    content_hash: str,
+    obra_id: str,
+) -> bool:
+    """Verifica se este evento já foi processado (idempotência por hash)."""
+    key = f"{event_id}:{content_hash}:{obra_id}"
+    result = await session.execute(
+        select(IdempotencyKey).where(IdempotencyKey.key == key)
+    )
+    return result.scalar_one_or_none() is not None
+
+async def get_idempotency_result(
+    session: AsyncSession,
+    event_id: str,
+    content_hash: str,
+    obra_id: str,
+) -> dict[str, Any] | None:
+    """Recupera resultado cacheado para requisição idempotente."""
+    key = f"{event_id}:{content_hash}:{obra_id}"
+    result = await session.execute(
+        select(IdempotencyKey).where(IdempotencyKey.key == key)
+    )
+    idempotency_key = result.scalar_one_or_none()
+    if idempotency_key:
+        return json.loads(idempotency_key.result)
+    return None
+
+async def register_idempotency(
+    session: AsyncSession,
+    event_id: str,
+    content_hash: str,
+    obra_id: str,
+    result: dict[str, Any],
+) -> None:
+    """Registra chave de idempotência com resultado."""
+    key = f"{event_id}:{content_hash}:{obra_id}"
+    idempotency = IdempotencyKey(
+        key=key,
+        event_id=event_id,
+        obra_id=obra_id,
+        result=json.dumps(result),
+    )
+    session.add(idempotency)
 
 async def process_telegram_event(
     session: AsyncSession,
     payload: OpenClawTelegramPayload,
+    headers: dict[str, str],
 ) -> dict[str, Any]:
+    """Processa evento do Telegram com idempotência e auditoria."""
     obra = await ensure_obra(session, payload.obra_id, payload.obra_nome)
     tg = payload.telegram
     text = tg.text or tg.caption or ""
 
-    existing = await session.execute(
+    # ===== 1. Calcula hash do conteúdo para idempotência =====
+    content = f"{text}:{payload.obra_id}:{tg.chat.id}"
+    content_hash = hashlib.sha256(content.encode()).hexdigest()
+
+    # ===== 2. Verifica idempotência =====
+    if await check_idempotency(session, payload.event_id, content_hash, obra.id):
+        cached_result = await get_idempotency_result(
+            session, payload.event_id, content_hash, obra.id
+        )
+        if cached_result:
+            return cached_result
+        # Se existe mas não tem resultado, retorne duplicate
+        return {"status": "duplicate", "event_id": payload.event_id}
+
+    # ===== 3. Persiste mensagem no banco =====
+    existing_msg = await session.execute(
         select(TelegramMessage).where(TelegramMessage.event_id == payload.event_id)
     )
-    if existing.scalar_one_or_none():
+    if existing_msg.scalar_one_or_none():
         return {"status": "duplicate", "event_id": payload.event_id}
 
     msg = TelegramMessage(
@@ -87,6 +148,7 @@ async def process_telegram_event(
     session.add(msg)
     await session.flush()
 
+    # ===== 4. Persiste raw no S3 (FONTE DE VERDADE!) =====
     envelope = {
         "event_id": payload.event_id,
         "obra_id": obra.id,
@@ -99,10 +161,13 @@ async def process_telegram_event(
         envelope=envelope,
     )
 
+    # ===== 5. Classificação (DEPOIS de persistir!) =====
     triagem = await openai_service.triagem_structured(
         text or "[mensagem sem texto — mídia]",
         context={"obra_id": obra.id, "has_photo": bool(tg.photo), "has_voice": bool(tg.voice)},
     )
+
+    # ===== 6. Cria documento e triagem =====
     doc = Documento(
         obra_id=obra.id,
         tipo=triagem.tipo_documento,
@@ -123,6 +188,7 @@ async def process_telegram_event(
         documento_id=doc.id,
     )
 
+    # ===== 7. Log de auditoria =====
     await audit_service.log_event(
         session,
         entidade="telegram_message",
@@ -135,9 +201,9 @@ async def process_telegram_event(
             "bucket_key": bucket_key,
         },
     )
-    await session.commit()
 
-    return {
+    # ===== 8. Prepara resultado =====
+    result = {
         "event_id": payload.event_id,
         "obra_id": obra.id,
         "telegram_message_id": str(msg.id),
@@ -151,3 +217,9 @@ async def process_telegram_event(
         "entrada_bucket_uri": bucket_uri,
         "status": doc.status.value,
     }
+
+    # ===== 9. Registra idempotência =====
+    await register_idempotency(session, payload.event_id, content_hash, obra.id, result)
+
+    await session.commit()
+    return result

@@ -247,3 +247,14 @@ class Medicao(Base):
     valor_medido: Mapped[float | None] = mapped_column(Float, nullable=True)
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IdempotencyKey(Base):
+    """Tabela para garantir idempotência de requisições (webhook, Telegram, etc.)."""
+    __tablename__ = "idempotency_keys"
+
+    key: Mapped[str] = mapped_column(String(512), primary_key=True, index=True)
+    event_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    obra_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    result: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
