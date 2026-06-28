@@ -2,12 +2,12 @@
 
 ## Resumo do agente
 
-**Obrabot (Construtora AgentOS)** é um agente de gestão documental para construtoras. Recebe entradas de engenheiros (texto via API e Telegram/OpenClaw; mídia em fase posterior), grava uma `EntradaBruta` e enfileira o processamento, classifica automaticamente (triagem), persiste evidências no bucket S3-compatible e orquestra delegação a agentes especialistas (RDO, fotos, orçamento, etc.).
+**Obrabot (Construtora AgentOS)** é um agente de gestão documental para construtoras. Recebe entradas de engenheiros (texto e mídia — foto/áudio/documento — via API e Telegram/OpenClaw), grava uma `EntradaBruta` e enfileira o processamento, classifica automaticamente (triagem), persiste evidências no bucket S3-compatible e orquestra delegação a agentes especialistas (RDO, fotos, orçamento, etc.).
 
 ## Requisitos assumidos
 
 - Usuários finais: 3 engenheiros de obra (organização interna de confiança)
-- Entrada: mensagem de texto via API HTTP e Telegram/OpenClaw (HMAC); mídia em fase posterior
+- Entrada: texto via API HTTP e Telegram/OpenClaw (HMAC); mídia (foto/áudio/documento) baixada no worker
 - Saída MVP: classificação estruturada + metadados + delegação ao especialista
 - Tarefas podem levar segundos a minutos (LLM + storage)
 - Validação humana obrigatória para documentos finais (fases futuras)
@@ -104,6 +104,9 @@ pip install uv && uv sync --frozen --no-dev
 | `REDIS_URL` | api, worker | Sim (referência Redis) |
 | `OPENAI_API_KEY` | worker | Recomendada (heurística sem chave) |
 | `OPENCLAW_SHARED_SECRET` | api | **Sim em produção** (HMAC do webhook; vazio = sem verificação) |
+| `TELEGRAM_BOT_TOKEN` | worker | Recomendada (download de mídia foto/áudio/documento via getFile) |
+| `TELEGRAM_REPLY_ENABLED` | worker | Não (default `false`; `true` ativa resposta de status ao engenheiro) |
+| `TELEGRAM_API_BASE` | worker | Não (default `https://api.telegram.org`) |
 | `OPENAI_MODEL` | worker | Não (default: gpt-4o-mini) |
 | `LLM_BASE_URL` | worker | Não |
 | `AGENT_NAME` | worker | Não |
@@ -162,7 +165,7 @@ curl https://<api-domain>/health
 
 ## Limitações conhecidas
 
-- OpenClaw/Telegram **ativo** para texto (HMAC + 202); mídia (foto/áudio) em fase posterior (Sprint 3)
+- OpenClaw/Telegram **ativo** para texto e mídia (foto/áudio/documento; download no worker — Sprint 3). Resposta de status ao engenheiro é opt-in (`TELEGRAM_REPLY_ENABLED`)
 - HMAC só é exigido se `OPENCLAW_SHARED_SECRET` estiver setado — **defina em produção**
 - Triagem heurística quando `OPENAI_API_KEY` ausente
 - S3 opcional — sem credenciais, entrada bruta vai ao bucket local (`.local-bucket`)

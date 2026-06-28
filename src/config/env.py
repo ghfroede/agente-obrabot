@@ -30,6 +30,11 @@ class Settings(BaseSettings):
         return url
 
     openclaw_shared_secret: str = ""
+
+    telegram_bot_token: str = ""
+    telegram_api_base: str = "https://api.telegram.org"
+    telegram_reply_enabled: bool = False
+
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     openai_vision_model: str = "gpt-4o-mini"
@@ -56,6 +61,10 @@ class Settings(BaseSettings):
     @property
     def s3_configured(self) -> bool:
         return bool(self.s3_endpoint_url and self.s3_access_key_id and self.s3_secret_access_key)
+
+    @property
+    def telegram_configured(self) -> bool:
+        return bool(self.telegram_bot_token)
 
 
 @lru_cache

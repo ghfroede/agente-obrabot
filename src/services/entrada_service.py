@@ -3,11 +3,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from redis import Redis
 from rq import Queue
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.env import get_settings
@@ -15,7 +16,14 @@ from src.core.constants import DocumentStatus
 from src.db.client import AsyncSessionLocal
 from src.db.models import Documento, EntradaBruta, Task, TaskStatus, TelegramMessage
 from src.schemas.domain import OpenClawTelegramPayload
-from src.services import audit_service, bucket_service, ingestao_service, openai_service
+from src.services import (
+    audit_service,
+    bucket_service,
+    ingestao_service,
+    media_service,
+    openai_service,
+    telegram_media_service,
+)
 
 
 def content_hash(*parts: str) -> str:
@@ -139,7 +147,10 @@ async def run_entrada_pipeline(entrada_id: str) -> dict[str, Any]:
             entrada.status = "completed"
             entrada.processed_at = datetime.now(UTC)
             await _mark_task(session, entrada, TaskStatus.COMPLETED, result=result)
+            reply = _build_reply(entrada, result)
             await session.commit()
+            if reply is not None:
+                await _send_reply(*reply)
             return result
         except Exception as exc:
             await session.rollback()
@@ -154,7 +165,6 @@ async def run_entrada_pipeline(entrada_id: str) -> dict[str, Any]:
 
 async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, Any]:
     obra = await ingestao_service.ensure_obra(session, entrada.obra_id)
-    text = entrada.text or "[mensagem sem texto — mídia]"
 
     # 1. Persiste raw no bucket (FONTE DE VERDADE) ANTES da IA.
     envelope = entrada.raw_payload or {"text": entrada.text}
@@ -167,22 +177,29 @@ async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, An
     entrada.storage_key = bucket_key
     entrada.storage_uri = bucket_uri
 
-    # 2. Triagem (DEPOIS de persistir).
+    # 2. Mídia (foto/áudio/documento): baixa do Telegram, persiste Arquivo e roda
+    #    visão/transcrição. Falha de uma mídia degrada — o raw já é fonte de verdade.
+    midias = await _process_media(session, entrada, obra.id)
+
+    # 3. Triagem (DEPOIS de persistir) — texto enriquecido com descrição/transcrição.
+    text = _compose_triagem_text(entrada.text, midias)
     triagem = await openai_service.triagem_structured(
         text, context={"obra_id": obra.id, "source": entrada.source}
     )
 
-    # 3. Documento + Triagem + Auditoria.
+    # 4. Documento + Triagem + Auditoria.
     doc = Documento(
         obra_id=obra.id,
         tipo=triagem.tipo_documento,
         titulo=f"{triagem.tipo_documento} — {str(entrada.id)[:8]}",
         revisao="REV00",
         status=DocumentStatus.TRIADO,
+        arquivo_id=_primary_arquivo_id(midias),
         metadata_json={
             "entrada_bucket": bucket_uri,
             "texto": entrada.text,
             "source": entrada.source,
+            "midias": midias,
         },
     )
     session.add(doc)
@@ -202,6 +219,7 @@ async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, An
             "event_id": entrada.event_id,
             "tipo_documento": triagem.tipo_documento,
             "bucket_key": bucket_key,
+            "midias": [m.get("kind") for m in midias],
         },
     )
     return {
@@ -215,8 +233,80 @@ async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, An
         "acao_sugerida": triagem.acao_sugerida,
         "precisa_aprovacao": triagem.precisa_aprovacao,
         "entrada_bucket_uri": bucket_uri,
+        "midias": midias,
         "status": doc.status.value,
     }
+
+
+async def _process_media(
+    session: AsyncSession, entrada: EntradaBruta, obra_id: str
+) -> list[dict[str, Any]]:
+    """Baixa e persiste mídias do payload Telegram (foto/áudio/documento)."""
+    raw = entrada.raw_payload or {}
+    telegram = raw.get("telegram")
+    if not isinstance(telegram, dict):
+        return []
+    refs = telegram_media_service.extract_media(telegram)
+    if not refs:
+        return []
+
+    tg_msg_id = await _find_telegram_message_id(session, entrada.event_id)
+    data_ref = _date_from_telegram(telegram)
+    results: list[dict[str, Any]] = []
+    for ref in refs:
+        try:
+            data = await telegram_media_service.download_file(ref.file_id)
+            summary = await media_service.ingest_media(
+                session,
+                obra_id=obra_id,
+                ref=ref,
+                data=data,
+                telegram_message_id=tg_msg_id,
+                data_ref=data_ref,
+            )
+        except Exception as exc:
+            # Degrada por mídia — não derruba a entrada (raw já persistido).
+            summary = {"kind": ref.kind, "file_id": ref.file_id, "erro": str(exc)[:200]}
+        results.append(summary)
+    return results
+
+
+async def _find_telegram_message_id(
+    session: AsyncSession, event_id: str | None
+) -> uuid.UUID | None:
+    if not event_id:
+        return None
+    result = await session.execute(
+        select(TelegramMessage.id).where(TelegramMessage.event_id == event_id)
+    )
+    return result.scalar_one_or_none()
+
+
+def _date_from_telegram(telegram: dict[str, Any]) -> date | None:
+    ts = telegram.get("date")
+    if not isinstance(ts, int):
+        return None
+    return datetime.fromtimestamp(ts, UTC).date()
+
+
+def _compose_triagem_text(text: str | None, midias: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    if text:
+        parts.append(text)
+    for m in midias:
+        if m.get("descricao"):
+            parts.append(f"[Foto] {m['descricao']}")
+        if m.get("transcricao"):
+            parts.append(f"[Áudio] {m['transcricao']}")
+    return "\n".join(parts) or "[mensagem sem texto — mídia]"
+
+
+def _primary_arquivo_id(midias: list[dict[str, Any]]) -> uuid.UUID | None:
+    for m in midias:
+        aid = m.get("arquivo_id")
+        if aid:
+            return uuid.UUID(str(aid))
+    return None
 
 
 async def _mark_task(
@@ -239,3 +329,32 @@ async def _mark_task(
         task.error = None
     if error is not None:
         task.error = error
+
+
+def _build_reply(entrada: EntradaBruta, result: dict[str, Any]) -> tuple[int, str] | None:
+    """Monta (chat_id, texto) de status para o engenheiro a partir do payload Telegram.
+
+    Lido antes do commit (atributos ainda carregados). Retorna ``None`` quando não há
+    chat de origem; o envio em si é gated por ``telegram_reply_enabled``.
+    """
+    raw = entrada.raw_payload or {}
+    telegram = raw.get("telegram")
+    if not isinstance(telegram, dict):
+        return None
+    chat = telegram.get("chat")
+    if not isinstance(chat, dict) or chat.get("id") is None:
+        return None
+
+    tipo = result.get("tipo_documento", "desconhecido")
+    proximo = "aguardando aprovação" if result.get("precisa_aprovacao", True) else "registrado"
+    documento_id = str(result.get("documento_id", ""))[:8]
+    texto = f"✅ Recebido. Tipo: {tipo}. Status: {proximo}. Documento {documento_id}."
+    return int(chat["id"]), texto
+
+
+async def _send_reply(chat_id: int, texto: str) -> None:
+    """Envia a resposta de status (best-effort) — falha de rede não derruba o pipeline."""
+    try:
+        await telegram_media_service.send_message(chat_id, texto)
+    except Exception:
+        return

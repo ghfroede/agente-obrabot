@@ -99,7 +99,7 @@ Estabilização e evolução em `dev/plan-2.md`:
 
 - ✅ **Sprint 1** — main estável: HMAC com `event_id`, idempotência atômica, ordem S3-antes-da-IA, testes
 - ✅ **Sprint 2** — ingestão unificada (`EntradaBruta`); `/tasks` e OpenClaw no mesmo fluxo (202 + fila RQ)
-- ⏳ **Sprint 3** — Telegram real: texto, foto e áudio (download de mídia)
+- ✅ **Sprint 3** — Telegram real: texto, foto e áudio (worker baixa mídia → `Arquivo`/`Foto`/`AudioTranscricao` + visão/transcrição; resposta de status opt-in)
 - ⏳ **Sprint 4** — RDO operacional com aprovação humana
 - ⏳ **Sprint 5** — relatório fotográfico
 - ⏳ **Sprint 6** — orçamento, cronograma e medição

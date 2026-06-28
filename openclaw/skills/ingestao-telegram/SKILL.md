@@ -63,6 +63,25 @@ signature = hmac.new(secret.encode(), canonical, hashlib.sha256).hexdigest()
 
 Reenvio do mesmo `event_id` + mesmo conteúdo retorna o resultado em cache (idempotência).
 
+## Mídia (foto, áudio, documento)
+
+O mesmo endpoint aceita mídia: inclua em `telegram` os campos nativos do Telegram — `photo` (lista de `PhotoSize`), `voice`, `audio` ou `document`, cada um com seu `file_id`. O worker baixa o binário (`getFile` → download), grava `Arquivo` + `Foto`/`AudioTranscricao`, roda visão/transcrição e enriquece a triagem (a foto/áudio viram contexto do texto classificado).
+
+```json
+{
+  "event_id": "uuid-unico",
+  "obra_id": "OBRA-001",
+  "telegram": {
+    "message_id": 2,
+    "chat": { "id": 123, "type": "private" },
+    "caption": "concretagem pilar P3",
+    "photo": [{ "file_id": "AgAC...", "file_size": 90210 }]
+  }
+}
+```
+
+Requer `TELEGRAM_BOT_TOKEN` no worker. Falha ao baixar uma mídia não derruba a entrada (o raw já é persistido); o erro fica registrado na mídia.
+
 ## Resposta
 
 `202 Accepted` com `{ "status": "queued", "entrada_id": "...", "event_id": "...", "obra_id": "..." }`. A triagem roda de forma assíncrona no worker — não espere o resultado da classificação na resposta do webhook.
