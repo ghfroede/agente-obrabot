@@ -249,6 +249,35 @@ class Medicao(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class EntradaBruta(Base):
+    """Entrada unificada de qualquer canal (api/telegram/openclaw/whatsapp).
+
+    Toda ingestão grava uma EntradaBruta ANTES de chamar IA; o processamento
+    pesado (storage + triagem + documento) roda no worker via fila RQ.
+    """
+
+    __tablename__ = "entradas_brutas"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    event_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
+    author: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    channel: Mapped[str] = mapped_column(String(32), nullable=False, default="api")
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    storage_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    storage_uri: Mapped[str | None] = mapped_column(String(1200), nullable=True)
+    hash_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="received", index=True)
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class IdempotencyKey(Base):
     """Tabela para garantir idempotência atômica de requisições (webhook, Telegram, etc.).
 

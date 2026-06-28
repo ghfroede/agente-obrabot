@@ -7,14 +7,12 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from redis import Redis
-from rq import Queue
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config.env import get_settings
 from src.db.client import get_async_session
 from src.db.models import Task, TaskStatus
+from src.services import entrada_service, ingestao_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -47,24 +45,33 @@ class TaskDetailResponse(BaseModel):
     finished_at: datetime | None
 
 
-def _enqueue_task(task_id: str) -> None:
-    settings = get_settings()
-    redis_conn = Redis.from_url(settings.redis_url)
-    queue = Queue("obrabot", connection=redis_conn)
-    queue.enqueue("src.worker.jobs.process_task", task_id, job_timeout=600)
-
-
 @router.post("", response_model=TaskResponse, status_code=202)
 async def create_task(
     body: CreateTaskRequest,
     session: AsyncSession = Depends(get_async_session),
 ) -> TaskResponse:
-    task = Task(status=TaskStatus.QUEUED, input=body.input.model_dump())
-    session.add(task)
-    await session.commit()
-    await session.refresh(task)
+    inp = body.input
+    obra_id = inp.obra_id or "SEM_OBRA"
 
-    await asyncio.to_thread(_enqueue_task, str(task.id))
+    task = Task(status=TaskStatus.QUEUED, input=inp.model_dump())
+    session.add(task)
+    await session.flush()
+
+    # Fluxo unificado: toda ingestão gera uma EntradaBruta antes da IA (Sprint 2).
+    await ingestao_service.ensure_obra(session, obra_id)
+    entrada = await entrada_service.create_entrada_bruta(
+        session,
+        source="api",
+        obra_id=obra_id,
+        text=inp.message,
+        author=inp.author,
+        channel=inp.channel,
+        raw_payload=inp.model_dump(),
+        task_id=task.id,
+    )
+    await session.commit()
+
+    await asyncio.to_thread(entrada_service.enqueue_entrada, str(entrada.id))
 
     return TaskResponse(taskId=str(task.id), status=task.status.value)
 

@@ -42,10 +42,10 @@ def _uri(key: str) -> str:
     return f"s3://{settings.s3_bucket_name}/{key}"
 
 
-def build_entrada_bruta_key(obra_id: str, event_id: str) -> str:
+def build_entrada_bruta_key(obra_id: str, event_id: str, source: str = "telegram") -> str:
     now = datetime.now(UTC)
     return (
-        f"obras/{obra_id}/01_entrada_bruta/telegram/"
+        f"obras/{obra_id}/01_entrada_bruta/{source}/"
         f"{now.year}/{now.month:02d}/{now.day:02d}/evt_{event_id}/envelope.json"
     )
 
@@ -135,8 +135,9 @@ def persist_entrada_bruta(
     obra_id: str,
     event_id: str,
     envelope: dict[str, Any],
+    source: str = "telegram",
 ) -> tuple[str, str]:
-    key = build_entrada_bruta_key(obra_id, event_id)
+    key = build_entrada_bruta_key(obra_id, event_id, source)
     envelope = {
         **envelope,
         "schema_version": SCHEMA_VERSION,

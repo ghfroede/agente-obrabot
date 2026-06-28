@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from src.agent.ceo import run_ceo_pipeline
 from src.db.client import SyncSessionLocal
 from src.db.models import Task, TaskStatus
+from src.services.entrada_service import run_entrada_pipeline
 
 
 def _safe_error(exc: Exception) -> str:
@@ -44,6 +45,11 @@ def process_task(task_id: str) -> None:
         raise
     finally:
         session.close()
+
+
+def process_entrada(entrada_id: str) -> None:
+    """RQ job: processamento unificado de qualquer canal (api/telegram/openclaw)."""
+    asyncio.run(run_entrada_pipeline(entrada_id))
 
 
 def main() -> None:
