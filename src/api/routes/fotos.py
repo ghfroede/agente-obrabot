@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +14,7 @@ router = APIRouter(prefix="/api/v1/fotos", tags=["fotos"])
 async def gerar_relatorio(
     body: FotoRelatorioRequest,
     session: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     return await foto_service.generate_photo_report(
         session,
         obra_id=body.obra_id,

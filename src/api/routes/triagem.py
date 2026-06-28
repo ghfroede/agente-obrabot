@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/api/v1/triagem", tags=["triagem"])
 
 
 @router.post("/classificar", response_model=TriagemOutput)
-async def classificar(payload: dict) -> TriagemOutput:
+async def classificar(payload: dict[str, Any]) -> TriagemOutput:
     text = str(payload.get("texto", ""))
     context = payload.get("contexto")
     return await openai_service.triagem_structured(text, context=context)
@@ -23,7 +24,7 @@ async def classificar(payload: dict) -> TriagemOutput:
 async def obter_triagem(
     triagem_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     result = await session.execute(select(Triagem).where(Triagem.id == triagem_id))
     row = result.scalar_one_or_none()
     if row is None:

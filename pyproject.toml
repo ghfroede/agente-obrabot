@@ -49,3 +49,10 @@ select = ["E", "F", "I", "UP"]
 python_version = "3.11"
 strict = true
 ignore_missing_imports = true
+
+# numpy 2.x ships PEP 695 `type` aliases nos stubs, que o mypy só aceita em py>=3.12.
+# numpy entra no grafo só via type hints opcionais do SDK openai — não é usado em src/.
+[[tool.mypy.overrides]]
+module = ["numpy.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true

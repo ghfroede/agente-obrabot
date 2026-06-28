@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/api/v1", tags=["rdo", "approvals", "documentos"])
 async def rdo_rascunho(
     body: RdoDraftRequest,
     session: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     try:
         return await rdo_service.create_rdo_draft(
             session,
@@ -33,7 +34,7 @@ async def rdo_rascunho(
 async def rdo_finalizar(
     body: RdoApproveRequest,
     session: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     try:
         return await rdo_service.finalize_rdo(
             session,
@@ -48,7 +49,7 @@ async def rdo_finalizar(
 async def aprovar(
     body: ApprovalRequest,
     session: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     try:
         return await approval_service.approve_document(
             session,
@@ -65,7 +66,7 @@ async def aprovar(
 async def obter_documento(
     documento_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     result = await session.execute(select(Documento).where(Documento.id == documento_id))
     doc = result.scalar_one_or_none()
     if doc is None:

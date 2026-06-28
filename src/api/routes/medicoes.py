@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,9 +11,9 @@ router = APIRouter(prefix="/api/v1/medicoes", tags=["medicoes"])
 
 @router.post("")
 async def registrar_medicoes(
-    payload: dict,
+    payload: dict[str, Any],
     session: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     return await medicao_service.registrar_medicao(
         session,
         obra_id=str(payload["obra_id"]),

@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +15,7 @@ async def telegram_event(
     request: Request,
     payload: OpenClawTelegramPayload,
     session: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """Recebe eventos do OpenClaw com HMAC + timestamp + event_id."""
     return await ingestao_service.process_telegram_event(
         session, payload, request.headers

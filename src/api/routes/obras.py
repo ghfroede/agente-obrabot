@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +12,7 @@ router = APIRouter(prefix="/api/v1/obras", tags=["obras"])
 
 
 @router.get("")
-async def listar_obras(session: AsyncSession = Depends(get_db)) -> list[dict]:
+async def listar_obras(session: AsyncSession = Depends(get_db)) -> list[dict[str, Any]]:
     result = await session.execute(select(Obra).order_by(Obra.created_at.desc()))
     return [
         {"id": o.id, "nome": o.nome, "slug": o.slug, "status": o.status}
@@ -19,7 +21,9 @@ async def listar_obras(session: AsyncSession = Depends(get_db)) -> list[dict]:
 
 
 @router.post("")
-async def criar_obra(payload: dict, session: AsyncSession = Depends(get_db)) -> dict:
+async def criar_obra(
+    payload: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> dict[str, Any]:
     obra_id = str(payload.get("id", "")).strip()
     nome = str(payload.get("nome", obra_id)).strip()
     if not obra_id:

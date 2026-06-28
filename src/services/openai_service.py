@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import re
-from typing import Any
+from typing import Any, cast
 
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -42,7 +42,7 @@ def _heuristic_triagem(text: str) -> TriagemOutput:
         tipo = "folha_pagamento"
 
     return TriagemOutput(
-        tipo_documento=tipo,
+        tipo_documento=cast(Any, tipo),
         confianca=0.45,
         resumo=text[:240],
         campos_extraidos={},

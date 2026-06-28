@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +14,7 @@ router = APIRouter(prefix="/api/v1", tags=["orcamento", "cronograma"])
 async def importar_orcamento(
     body: OrcamentoImportRequest,
     session: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     return await orcamento_service.import_orcamento(
         session, obra_id=body.obra_id, itens=body.itens
     )
@@ -22,7 +24,7 @@ async def importar_orcamento(
 async def importar_cronograma(
     body: CronogramaImportRequest,
     session: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     return await orcamento_service.import_cronograma(
         session, obra_id=body.obra_id, atividades=body.atividades
     )

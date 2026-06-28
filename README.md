@@ -1,6 +1,6 @@
 # Obrabot — Construtora AgentOS
 
-Agente de IA para gestão documental de obras de construção civil. MVP focado em **triagem automática**, **persistência auditável** e **orquestração CEO** para entradas de engenheiros (texto, futuro Telegram/OpenClaw).
+Agente de IA para gestão documental de obras de construção civil. MVP focado em **triagem automática**, **persistência auditável** e **orquestração CEO** para entradas de engenheiros (texto via API e **Telegram via OpenClaw** — integração ativa/experimental, autenticada por HMAC).
 
 ## Stack
 
@@ -40,6 +40,7 @@ make dev-worker
 | GET | `/health` | Healthcheck (app, Postgres, Redis) |
 | POST | `/tasks` | Cria tarefa de triagem |
 | GET | `/tasks/:id` | Consulta status/resultado |
+| POST | `/api/v1/openclaw/telegram-event` | Ingestão Telegram via OpenClaw (HMAC + idempotência) |
 
 ### Exemplo
 
