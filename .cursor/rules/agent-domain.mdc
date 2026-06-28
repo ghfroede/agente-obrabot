@@ -1,0 +1,41 @@
+---
+description: Regras de domínio — triagem, CEO pipeline e invariantes de obra
+globs: "src/agent/**/*.py"
+alwaysApply: false
+---
+
+# Domínio — agentes de obra
+
+## Pipeline de ingestão (atual — `entrada_service.run_entrada_pipeline`)
+
+Roda no worker (`process_entrada`), fora do request:
+
+1. Carrega `EntradaBruta`, marca `processing`.
+2. Persiste raw no bucket (FONTE DE VERDADE) ANTES da IA.
+3. Triagem (`openai_service.triagem_structured`).
+4. Cria `Documento` (TRIADO) + `Triagem` + `AuditoriaEvento`.
+5. Marca `completed`/`failed`; espelha status na `Task` ligada (se houver).
+
+## Pipeline CEO (`run_ceo_pipeline` — legado, job `process_task`)
+
+1. Validar `message` obrigatório.
+2. `persist_raw_entry` (se S3 configurado) ANTES de classificar.
+3. `classify_entry` → JSON com `tipo_documento`, `obra_id`, `pendencias`, `delegar_para`.
+4. Retornar delegação e `proximo_passo` (esclarecimento vs especialista).
+
+## Triagem
+
+- Tipos em `DOCUMENT_TYPES` (`src/agent/triagem.py`).
+- LLM via httpx OpenAI-compatible; fallback heurístico sem `OPENAI_API_KEY`.
+- Resposta LLM: **somente JSON válido** — parse defensivo com `_parse_json_response`.
+
+## Invariantes
+
+- Persistir entrada bruta no bucket quando possível.
+- Nunca confiar só na IA — registrar tudo no PostgreSQL.
+- `pendencias` não vazias → `precisa_esclarecimento=True`.
+- Não implementar especialistas (RDO, fotos, etc.) neste módulo sem pedido — apenas delegar.
+
+## Extensão futura
+
+Novos agentes especialistas: módulos em `src/agent/` + job RQ dedicado. Manter CEO como orquestrador fino.

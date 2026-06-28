@@ -1,0 +1,47 @@
+---
+description: Deploy Railway — config as code, serviços api/worker e armadilhas comuns
+globs: "{railway*.json,docs/railway*.md,docs/operations.md,Makefile}"
+alwaysApply: false
+---
+
+# Railway deploy
+
+## Serviços
+
+| Serviço | Config | Start |
+|---------|--------|-------|
+| `api` | `railway.api.json` | uvicorn `src.api.server:app` |
+| `worker` | `railway.worker.json` | `python -m src.worker.index` |
+
+## GitHub vs CLI
+
+- `railway.json` está no `.gitignore` — deploy GitHub **não** o vê.
+- Opção A: dashboard → Config-as-code → path `railway.api.json` / `railway.worker.json`.
+- Opção B: `RAILPACK_START_CMD` por serviço (ver `docs/railway-deploy-plan.md`).
+
+## Build
+
+```bash
+pip install uv && uv sync --frozen --no-dev
+```
+
+## API pre-deploy
+
+```bash
+.venv/bin/alembic upgrade head
+```
+
+## Deploy manual
+
+```bash
+railway link -s api
+Copy-Item railway.api.json railway.json -Force
+railway up -s api --detach
+```
+
+Worker: idem com `railway.worker.json`.
+
+## Nunca
+
+- Expor worker com domínio público.
+- Commitar secrets ou `railway.json`.

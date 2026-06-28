@@ -2,12 +2,12 @@
 
 ## Resumo do agente
 
-**Obrabot (Construtora AgentOS)** é um agente de gestão documental para construtoras. Recebe entradas de engenheiros (texto, futuramente mídia via Telegram/OpenClaw), classifica automaticamente (triagem), persiste evidências no bucket S3-compatible e orquestra delegação a agentes especialistas (RDO, fotos, orçamento, etc.).
+**Obrabot (Construtora AgentOS)** é um agente de gestão documental para construtoras. Recebe entradas de engenheiros (texto via API e Telegram/OpenClaw; mídia em fase posterior), grava uma `EntradaBruta` e enfileira o processamento, classifica automaticamente (triagem), persiste evidências no bucket S3-compatible e orquestra delegação a agentes especialistas (RDO, fotos, orçamento, etc.).
 
 ## Requisitos assumidos
 
 - Usuários finais: 3 engenheiros de obra (organização interna de confiança)
-- Entrada MVP: mensagem de texto via API HTTP (Telegram/OpenClaw em fase posterior)
+- Entrada: mensagem de texto via API HTTP e Telegram/OpenClaw (HMAC); mídia em fase posterior
 - Saída MVP: classificação estruturada + metadados + delegação ao especialista
 - Tarefas podem levar segundos a minutos (LLM + storage)
 - Validação humana obrigatória para documentos finais (fases futuras)
@@ -103,6 +103,7 @@ pip install uv && uv sync --frozen --no-dev
 | `DATABASE_URL` | api, worker | Sim (referência Postgres) |
 | `REDIS_URL` | api, worker | Sim (referência Redis) |
 | `OPENAI_API_KEY` | worker | Recomendada (heurística sem chave) |
+| `OPENCLAW_SHARED_SECRET` | api | **Sim em produção** (HMAC do webhook; vazio = sem verificação) |
 | `OPENAI_MODEL` | worker | Não (default: gpt-4o-mini) |
 | `LLM_BASE_URL` | worker | Não |
 | `AGENT_NAME` | worker | Não |
@@ -150,19 +151,22 @@ curl https://<api-domain>/health
 - [ ] Logs API sem crash loop
 - [ ] Logs worker sem crash loop
 - [ ] `GET /health` retorna 200 com postgres e redis ok
-- [ ] `POST /tasks` retorna taskId
+- [ ] `POST /tasks` retorna `202` + taskId
 - [ ] `GET /tasks/:id` evolui queued → processing → completed
+- [ ] `POST /api/v1/openclaw/telegram-event` (com HMAC válido) retorna `202`
+- [ ] `OPENCLAW_SHARED_SECRET` definido no serviço `api`
 - [ ] Migrations executadas (pre-deploy API)
 - [ ] Worker sem domínio público
 - [ ] API com domínio HTTPS Railway
 - [ ] Secrets não aparecem nos logs
 
-## Limitações conhecidas (MVP 1)
+## Limitações conhecidas
 
-- Sem integração Telegram/OpenClaw ainda (API HTTP only)
+- OpenClaw/Telegram **ativo** para texto (HMAC + 202); mídia (foto/áudio) em fase posterior (Sprint 3)
+- HMAC só é exigido se `OPENCLAW_SHARED_SECRET` estiver setado — **defina em produção**
 - Triagem heurística quando `OPENAI_API_KEY` ausente
-- S3 opcional — sem credenciais, entrada bruta não vai ao bucket
-- PDF/RDO/aprovação humana: MVP 2+
+- S3 opcional — sem credenciais, entrada bruta vai ao bucket local (`.local-bucket`)
+- PDF/RDO/aprovação humana: Sprint 4+
 - pgvector/RAG: futuro
 
 ## Referências Railway consultadas

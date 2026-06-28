@@ -16,31 +16,44 @@ Roadmap detalhado: `dev/plan-1.md` (não implementar escopo futuro sem pedido ex
 | API | FastAPI + Uvicorn (`src/api/`) |
 | Worker | RQ + Redis (`src/worker/`) |
 | Banco | PostgreSQL + SQLAlchemy async + Alembic |
-| LLM | httpx + API OpenAI-compatible |
+| LLM | OpenAI SDK (`AsyncOpenAI`), API OpenAI-compatible |
 | Storage | S3-compatible opcional (`src/storage/`) |
 | Deploy | Railway (serviços `api` + `worker`) |
 
 ## Arquitetura
 
+Ingestão **unificada** (Sprint 2): todo canal grava uma `EntradaBruta` antes da IA e enfileira `process_entrada`; o processamento pesado roda no worker.
+
 ```
-POST /tasks → API (FastAPI) → Redis (fila obrabot) → Worker → run_ceo_pipeline
-                ↓                                        ↓
-           PostgreSQL                              PostgreSQL + S3 (opcional)
+POST /tasks            ┐
+POST /api/v1/openclaw  ┘→ API (FastAPI) → cria EntradaBruta → Redis (fila obrabot) → 202
+                                ↓                                      ↓
+                           PostgreSQL                    Worker → run_entrada_pipeline
+                                                              ↓ (raw S3 ANTES da IA)
+                                                   S3 + triagem + Documento/Triagem/Auditoria
 ```
+
+- `/tasks`: cria `Task` + `EntradaBruta(source=api, task_id)`; worker espelha status na `Task` (poll `GET /tasks/:id`).
+- OpenClaw: HMAC + idempotência atômica → `EntradaBruta(source=openclaw)` → `202 Accepted` (sem IA no request).
+- Núcleo único: `src/services/entrada_service.py`. `run_ceo_pipeline` é legado (job `process_task`).
 
 ### Entry points
 
 | Arquivo | Papel |
 |---------|-------|
-| `src/api/server.py` | App FastAPI |
-| `src/api/routes/tasks.py` | Criação/consulta de tarefas |
+| `src/api/server.py` | App FastAPI (registra todos os routers) |
+| `src/api/routes/tasks.py` | `/tasks` — cria Task + EntradaBruta, enfileira |
+| `src/api/routes/openclaw.py` | Webhook OpenClaw/Telegram (HMAC, 202) |
 | `src/api/routes/health.py` | Healthcheck `/health` |
-| `src/worker/index.py` | Worker RQ + `process_task` |
-| `src/agent/ceo.py` | Pipeline CEO (triagem → storage → delegação) |
+| `src/services/entrada_service.py` | **Núcleo de ingestão unificada** (entrada + fila + pipeline) |
+| `src/services/ingestao_service.py` | `ensure_obra`, `save_triagem`, idempotência atômica |
+| `src/worker/index.py` | Worker RQ: `process_entrada` (atual) + `process_task` (legado) |
+| `src/agent/ceo.py` | `run_ceo_pipeline` (legado, usado por `process_task`) |
 | `src/agent/triagem.py` | Classificação LLM + heurística fallback |
+| `src/core/security.py` | HMAC OpenClaw (`verify_hmac_signature`) |
 | `src/config/env.py` | Settings via pydantic-settings |
-| `src/db/models.py` | `Task`, `Obra` |
-| `alembic/` | Migrations |
+| `src/db/models.py` | `Task`, `Obra`, `EntradaBruta`, `IdempotencyKey`, cadeia de documentos |
+| `alembic/` | Migrations (head: `005_add_entradas_brutas`) |
 
 ## Comandos
 
@@ -67,11 +80,12 @@ docker compose up -d       # Postgres + Redis local
 
 ## Invariantes de domínio (MVP)
 
-1. Toda entrada deve poder ser persistida no bucket antes do processamento de IA (quando S3 configurado).
-2. Toda tarefa gera registro no PostgreSQL (`tasks`).
-3. Triagem retorna JSON estruturado (`tipo_documento`, `obra_id`, `pendencias`, etc.).
-4. PDF final e publicação em pasta final exigem validação humana (fases futuras).
-5. Fonte de verdade: bucket + PostgreSQL — não a resposta da IA.
+1. Todo canal gera uma `EntradaBruta` no PostgreSQL **antes** de chamar IA; o raw vai ao bucket antes da triagem (quando S3 configurado).
+2. Sem IA no caminho do request — processamento pesado vai para a fila RQ (`process_entrada`).
+3. Idempotência do webhook é **atômica** (`INSERT ... ON CONFLICT`); reenvio retorna resultado em cache.
+4. Triagem retorna JSON estruturado (`tipo_documento`, `obra_id`, `pendencias`, etc.).
+5. PDF final e publicação em pasta final exigem validação humana (fases futuras).
+6. Fonte de verdade: bucket + PostgreSQL — não a resposta da IA.
 
 ## Deploy Railway
 
@@ -86,16 +100,18 @@ docker compose up -d       # Postgres + Redis local
 - Não adicionar `openai-agents-python` no núcleo MVP.
 - Não tornar o worker público no Railway.
 - Não criar commits/PRs sem pedido explícito do usuário.
-- Não expandir escopo para Telegram/OpenClaw/RDO sem solicitação.
+- OpenClaw/Telegram **já ativos** (HMAC + 202). Não expandir para novos canais (WhatsApp) nem especialistas (RDO/fotos/orçamento/medição) sem solicitação — ver `dev/plan-2.md`.
 
 ## Mapa rápido de diretórios
 
 ```
-src/agent/     Lógica de agentes (CEO, triagem)
-src/api/       HTTP FastAPI
-src/worker/    Jobs RQ
+src/agent/     Lógica de agentes (CEO legado, triagem)
+src/api/       HTTP FastAPI (routes/)
+src/services/  Núcleo de negócio (entrada, ingestão, bucket, openai, etc.)
+src/worker/    Jobs RQ (process_entrada, process_task)
 src/db/        Models + sessions
 src/storage/   S3
+src/core/      Constantes, erros, segurança (HMAC)
 src/config/    Env settings
 tests/         pytest
 alembic/       Migrations

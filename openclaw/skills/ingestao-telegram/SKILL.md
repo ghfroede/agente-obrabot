@@ -62,3 +62,7 @@ signature = hmac.new(secret.encode(), canonical, hashlib.sha256).hexdigest()
 ```
 
 Reenvio do mesmo `event_id` + mesmo conteúdo retorna o resultado em cache (idempotência).
+
+## Resposta
+
+`202 Accepted` com `{ "status": "queued", "entrada_id": "...", "event_id": "...", "obra_id": "..." }`. A triagem roda de forma assíncrona no worker — não espere o resultado da classificação na resposta do webhook.

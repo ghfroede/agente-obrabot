@@ -82,22 +82,27 @@ Opcionais:
 ## Arquitetura Railway
 
 ```
-[Cliente/Telegram futuro] → API (público) → Redis → Worker (privado)
-                                ↓                      ↓
-                           PostgreSQL              PostgreSQL
-                                ↓
-                           MEGA S4 (opcional)
+Cliente HTTP / Telegram (OpenClaw) → API (público) → EntradaBruta → Redis → Worker (privado)
+                                          ↓                                       ↓
+                                     PostgreSQL                          raw S3 → triagem IA
+                                          ↓                                       ↓
+                                     MEGA S4 (opcional)            Documento/Triagem/Auditoria
 ```
+
+Ingestão unificada: todo canal grava uma `EntradaBruta` e responde rápido (`202`); o worker faz storage + triagem fora do request. Detalhes em [AGENTS.md](AGENTS.md) e `dev/plan-2.md`.
 
 Documentação detalhada: `docs/railway-deploy-plan.md`, `docs/operations.md` e [`AGENTS.md`](AGENTS.md) (instruções para agentes de IA).
 
-## Roadmap (plano-01)
+## Roadmap
 
-1. **MVP 1** (atual): triagem, tarefas, bucket opcional, banco
-2. **MVP 2**: RDO com aprovação Telegram
-3. **MVP 3**: relatório fotográfico
-4. **MVP 4**: orçamento e cronograma
-5. **MVP 5**: medições e gestão
+Estabilização e evolução em `dev/plan-2.md`:
+
+- ✅ **Sprint 1** — main estável: HMAC com `event_id`, idempotência atômica, ordem S3-antes-da-IA, testes
+- ✅ **Sprint 2** — ingestão unificada (`EntradaBruta`); `/tasks` e OpenClaw no mesmo fluxo (202 + fila RQ)
+- ⏳ **Sprint 3** — Telegram real: texto, foto e áudio (download de mídia)
+- ⏳ **Sprint 4** — RDO operacional com aprovação humana
+- ⏳ **Sprint 5** — relatório fotográfico
+- ⏳ **Sprint 6** — orçamento, cronograma e medição
 
 ## Licença
 

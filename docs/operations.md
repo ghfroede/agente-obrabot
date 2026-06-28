@@ -66,6 +66,9 @@ Reinicie/redeploy o worker após alterar variáveis.
 railway variable set OPENAI_API_KEY=sk-... --service worker
 railway variable set OPENAI_API_KEY=sk-... --service api  # se necessário
 
+# HMAC OpenClaw — OBRIGATÓRIO em produção (vazio = verificação ignorada!)
+railway variable set OPENCLAW_SHARED_SECRET=... --service api
+
 # S3 / MEGA S4
 railway variable set S3_ENDPOINT_URL=... --service worker
 railway variable set S3_ACCESS_KEY_ID=... --service worker
@@ -81,8 +84,10 @@ Referencie `DATABASE_URL` e `REDIS_URL` das variáveis dos serviços Postgres/Re
 |---------|----------------|------|
 | `/health` 503 postgres | `DATABASE_URL` incorreta ou migration pendente | Verificar referência + `alembic upgrade head` |
 | `/health` 503 redis | `REDIS_URL` incorreta | Referenciar Redis service |
-| Task stuck em `queued` | Worker offline | Logs worker, verificar Redis |
-| Task `failed` | LLM timeout ou S3 error | Ver `error` em GET /tasks/:id |
+| Task / `EntradaBruta` stuck em `queued`/`received` | Worker offline | Logs worker, verificar Redis |
+| OpenClaw responde `202` mas nada acontece | Worker offline / fila parada | Ver `EntradaBruta.status` no banco + logs worker |
+| Task `failed` ou `EntradaBruta.status=failed` | LLM timeout ou S3 error | Ver `error` em `GET /tasks/:id` / logs worker |
+| OpenClaw `401` | HMAC/timestamp/`X-Event-Id` inválido | Conferir assinatura canônica e relógio (±5 min) |
 | Crash loop API | Porta errada | Usar `$PORT`, host `0.0.0.0` |
 | Worker SIGTERM | Deploy rolling | Normal; RQ re-enfileira job não ack |
 

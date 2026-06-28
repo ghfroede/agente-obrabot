@@ -1,0 +1,41 @@
+---
+description: Contexto central do Obrabot — stack, arquitetura e convenções
+alwaysApply: true
+---
+
+# Obrabot — regras centrais
+
+Projeto Python FastAPI + RQ worker para triagem documental de obras.
+
+## Fluxo principal (ingestão unificada — Sprint 2)
+
+Todo canal grava `EntradaBruta` (status `received`) ANTES da IA e enfileira `process_entrada`:
+
+- `POST /tasks` → `Task` (queued) + `EntradaBruta(source=api, task_id)` → fila RQ → `202`
+- `POST /api/v1/openclaw/telegram-event` → HMAC + idempotência → `EntradaBruta(source=openclaw)` → `202`
+- Worker `process_entrada` → `run_entrada_pipeline`: raw S3 → triagem → Documento/Triagem/Auditoria; espelha status na `Task`
+
+`run_ceo_pipeline`/`process_task` são legado. Núcleo: `src/services/entrada_service.py`.
+
+## Onde editar
+
+- Núcleo de ingestão: `src/services/entrada_service.py`
+- Rotas HTTP: `src/api/routes/`
+- Serviços de negócio: `src/services/`
+- Jobs/fila: `src/worker/`
+- Models/migrations: `src/db/`, `alembic/`
+- Config: `src/config/env.py`, `.env.example`
+
+## Princípios
+
+- Diff mínimo; siga padrões existentes (Pydantic v2, SQLAlchemy 2.0 async na API).
+- Use `uv run` / `make` — não pip global.
+- Secrets via env; nunca commitar credenciais.
+- Escopo MVP 1 apenas, salvo pedido explícito (ver `dev/plan-1.md`).
+- Respostas ao usuário em português.
+
+## Verificação antes de entregar
+
+```bash
+make lint && make typecheck && make test
+```

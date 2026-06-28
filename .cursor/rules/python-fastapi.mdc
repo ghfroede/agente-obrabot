@@ -1,0 +1,53 @@
+---
+description: Padrões Python, FastAPI, SQLAlchemy e testes do Obrabot
+globs: "{src/**/*.py,tests/**/*.py,alembic/**/*.py}"
+alwaysApply: false
+---
+
+# Python / FastAPI
+
+## Estilo
+
+- `from __future__ import annotations` nos módulos principais.
+- Imports no topo — sem imports inline.
+- mypy strict: tipar retornos e parâmetros públicos.
+- ruff: linha 100, target py311.
+
+## API vs Worker
+
+```python
+# API — async session
+async def handler(session: AsyncSession = Depends(get_async_session)): ...
+
+# Worker RQ — job síncrono que executa o pipeline async
+def process_entrada(entrada_id: str) -> None:
+    asyncio.run(run_entrada_pipeline(entrada_id))  # abre AsyncSessionLocal interno
+```
+
+Ingestão pesada NÃO roda no request: a rota grava `EntradaBruta` + `enqueue_entrada` e o worker processa (`process_entrada`).
+
+## Switch exhaustivo
+
+Em unions/enums, use `never` no `default`:
+
+```python
+match status:
+    case TaskStatus.QUEUED: ...
+    case _: assert_never(status)
+```
+
+## FastAPI
+
+- Routers em `src/api/routes/` com `APIRouter(prefix=...)`.
+- Schemas Pydantic separados dos models SQLAlchemy.
+- Erros HTTP com `HTTPException`; mensagens em português para usuário final.
+
+## SQLAlchemy
+
+- Models em `src/db/models.py`; JSONB para `input`/`result`.
+- Migrations Alembic para qualquer alteração de schema — não alterar DB manualmente.
+
+## Testes
+
+- pytest + pytest-asyncio (`asyncio_mode = auto`).
+- Mockar LLM/Redis/S3 — não depender de serviços externos nos testes unitários.
