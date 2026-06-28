@@ -3,6 +3,7 @@
 .env.local
 .envrc
 .railway/
+.railway-config-pull*/
 railway.json
 dev/
 

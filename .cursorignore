@@ -1,0 +1,29 @@
+﻿# Ambientes e caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+
+# Railway local
+.railway/
+.railway-config-pull*/
+railway.json
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Planos internos
+dev/
+
+# Build / IDE
+dist/
+build/
+.idea/
+.vscode/
+*.log
