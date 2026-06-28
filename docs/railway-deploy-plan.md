@@ -71,7 +71,14 @@ Dois arquivos separados (mesmo repo, serviços diferentes):
 - `railway.api.json` — build, pre-deploy migration, healthcheck `/health`
 - `railway.worker.json` — worker always-on, restart ALWAYS
 
-Configure cada serviço no dashboard Railway para apontar ao arquivo correto (Settings → Config-as-code).
+Configure cada serviço no dashboard Railway para apontar ao arquivo correto (Settings → Config-as-code), **ou** defina `RAILPACK_START_CMD` por serviço (necessário para deploy via GitHub se o config path não estiver configurado):
+
+```bash
+railway variable set RAILPACK_START_CMD=".venv/bin/python -m uvicorn src.api.server:app --host 0.0.0.0 --port \$PORT" --service api
+railway variable set RAILPACK_START_CMD=".venv/bin/python -m src.worker.index" --service worker
+```
+
+`railway.json` fica no `.gitignore` (cópia local para `railway up`); deploys pelo GitHub não o enxergam. Sem config path ou `RAILPACK_START_CMD`, o Railpack falha com *No start command detected* porque o FastAPI está em `src/api/server.py`.
 
 ## Build / Start
 
@@ -105,6 +112,7 @@ pip install uv && uv sync --frozen --no-dev
 | `S3_SECRET_ACCESS_KEY` | worker | Não |
 | `S3_BUCKET_NAME` | worker | Não |
 | `PORT` | api | Sim (Railway injeta) |
+| `RAILPACK_START_CMD` | api, worker | Sim (deploy GitHub sem config path) |
 
 ## Comandos de deploy
 

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Relatório Fotográfico — {{ obra_id }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    .foto { border-bottom: 1px solid #e2e8f0; padding: 1rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Relatório Fotográfico</h1>
+  <p>Obra: {{ obra_id }} | Período: {{ periodo_inicio }} a {{ periodo_fim }} | {{ revisao }}</p>
+  <p>Gerado por: {{ generated_by }}</p>
+  {% for foto in fotos %}
+  <div class="foto">
+    <p><strong>Data:</strong> {{ foto.data_foto }}</p>
+    <p><strong>Descrição:</strong> {{ foto.descricao or '—' }}</p>
+    <p><strong>Tags:</strong> {{ foto.tags or [] }}</p>
+  </div>
+  {% else %}
+  <p>Nenhuma foto no período.</p>
+  {% endfor %}
+</body>
+</html>

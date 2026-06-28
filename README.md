@@ -88,7 +88,7 @@ Opcionais:
                            MEGA S4 (opcional)
 ```
 
-Documentação detalhada: `docs/railway-deploy-plan.md` e `docs/operations.md`.
+Documentação detalhada: `docs/railway-deploy-plan.md`, `docs/operations.md` e [`AGENTS.md`](AGENTS.md) (instruções para agentes de IA).
 
 ## Roadmap (plano-01)
 

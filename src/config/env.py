@@ -29,9 +29,16 @@ class Settings(BaseSettings):
             return url.replace("postgres://", "postgresql+asyncpg://", 1)
         return url
 
+    openclaw_shared_secret: str = ""
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    openai_vision_model: str = "gpt-4o-mini"
+    openai_transcription_model: str = "whisper-1"
+    openai_embedding_model: str = "text-embedding-3-small"
     llm_base_url: str = "https://api.openai.com/v1"
+
+    local_bucket_path: str = ".local-bucket"
+    templates_dir: str = "src/templates"
 
     s3_endpoint_url: str = ""
     s3_access_key_id: str = ""

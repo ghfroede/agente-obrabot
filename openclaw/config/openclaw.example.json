@@ -1,0 +1,24 @@
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "webhookUrl": "${OBRABOT_API_URL}/api/v1/openclaw/telegram-event"
+    }
+  },
+  "skills": {
+    "paths": ["./openclaw/skills"]
+  },
+  "agents": {
+    "ceo": {
+      "workspace": "./openclaw/agents/ceo",
+      "model": "${OPENAI_MODEL}",
+      "skills": ["triagem-obra", "ingestao-telegram"]
+    }
+  },
+  "backend": {
+    "baseUrl": "${OBRABOT_API_URL}",
+    "sharedSecretHeader": "X-OpenClaw-Secret",
+    "sharedSecret": "${OPENCLAW_SHARED_SECRET}"
+  }
+}

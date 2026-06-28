@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>RDO {{ obra.id }} — {{ data_ref }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    h1 { color: #1a365d; }
+    .meta { color: #555; margin-bottom: 1.5rem; }
+    pre { background: #f7fafc; padding: 1rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Relatório Diário de Obra (RDO)</h1>
+  <div class="meta">
+    <p><strong>Obra:</strong> {{ obra.nome }} ({{ obra.id }})</p>
+    <p><strong>Data:</strong> {{ data_ref }}</p>
+    <p><strong>Revisão:</strong> {{ revisao }}</p>
+    <p><strong>Gerado por:</strong> {{ generated_by }}</p>
+  </div>
+  <h2>Conteúdo</h2>
+  <ul>
+  {% for key, value in conteudo.items() %}
+    <li><strong>{{ key }}:</strong> {{ value }}</li>
+  {% endfor %}
+  </ul>
+</body>
+</html>
