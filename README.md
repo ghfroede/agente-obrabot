@@ -72,6 +72,7 @@ Veja `.env.example`. Obrigatórias em produção:
 
 - `DATABASE_URL` — PostgreSQL (Railway injeta automaticamente)
 - `REDIS_URL` — Redis (Railway injeta automaticamente)
+- `OPENCLAW_SHARED_SECRET` + `OPENCLAW_REQUIRE_HMAC=true` — assinatura HMAC do webhook OpenClaw
 - `OPENAI_API_KEY` — para triagem via LLM (sem chave, usa heurística)
 
 Opcionais:

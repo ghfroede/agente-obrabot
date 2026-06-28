@@ -103,7 +103,8 @@ pip install uv && uv sync --frozen --no-dev
 | `DATABASE_URL` | api, worker | Sim (referência Postgres) |
 | `REDIS_URL` | api, worker | Sim (referência Redis) |
 | `OPENAI_API_KEY` | worker | Recomendada (heurística sem chave) |
-| `OPENCLAW_SHARED_SECRET` | api | **Sim em produção** (HMAC do webhook; vazio = sem verificação) |
+| `OPENCLAW_SHARED_SECRET` | api | **Sim em produção** (segredo usado para HMAC do webhook) |
+| `OPENCLAW_REQUIRE_HMAC` | api | **Sim em produção** (`true`; `X-OpenClaw-Secret` é legado apenas para dev sem HMAC obrigatório) |
 | `TELEGRAM_BOT_TOKEN` | worker | Recomendada (download de mídia foto/áudio/documento via getFile) |
 | `TELEGRAM_REPLY_ENABLED` | worker | Não (default `false`; `true` ativa resposta de status ao engenheiro) |
 | `TELEGRAM_API_BASE` | worker | Não (default `https://api.telegram.org`) |
@@ -166,7 +167,7 @@ curl https://<api-domain>/health
 ## Limitações conhecidas
 
 - OpenClaw/Telegram **ativo** para texto e mídia (foto/áudio/documento; download no worker — Sprint 3). Resposta de status ao engenheiro é opt-in (`TELEGRAM_REPLY_ENABLED`)
-- HMAC só é exigido se `OPENCLAW_SHARED_SECRET` estiver setado — **defina em produção**
+- HMAC é obrigatório em produção; `X-OpenClaw-Secret` é aceito apenas como legado em desenvolvimento sem HMAC obrigatório
 - Triagem heurística quando `OPENAI_API_KEY` ausente
 - S3 opcional — sem credenciais, entrada bruta vai ao bucket local (`.local-bucket`)
 - PDF/RDO/aprovação humana: Sprint 4+

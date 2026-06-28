@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -21,6 +21,7 @@ def test_content_hash_deterministic() -> None:
 
 async def test_create_entrada_bruta_defaults_received() -> None:
     session = AsyncMock()
+    session.add = MagicMock()
     entrada = await create_entrada_bruta(
         session,
         source="api",
@@ -58,6 +59,7 @@ async def test_ingest_telegram_duplicate_returns_cached(monkeypatch: pytest.Monk
         telegram=TelegramEvent(message_id=1, chat=TelegramChat(id=10), text="oi"),
     )
     session = AsyncMock()
+    session.add = MagicMock()
 
     result = await entrada_service.ingest_telegram(session, payload)
 

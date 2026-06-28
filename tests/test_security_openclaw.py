@@ -32,12 +32,12 @@ def _settings_production(secret: str = "", **overrides: object) -> SimpleNamespa
     return SimpleNamespace(**base)
 
 
-def _make_request(body: bytes = b"{}") -> Request:
+def _make_request(body: bytes = b"{}", headers: dict[str, str] | None = None) -> Request:
     scope = {
         "type": "http",
         "method": "POST",
         "path": PATH,
-        "headers": [],
+        "headers": [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()],
         "query_string": b"",
     }
 
@@ -165,7 +165,9 @@ async def test_body_too_large_returns_413(monkeypatch: pytest.MonkeyPatch) -> No
     assert exc.value.status_code == 413
 
 
-async def test_static_secret_header_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_static_secret_header_rejected_when_hmac_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         security,
         "get_settings",
@@ -179,17 +181,29 @@ async def test_static_secret_header_accepted(monkeypatch: pytest.MonkeyPatch) ->
         ),
     )
     body = json.dumps({"event_id": "e1"}).encode()
-    scope = {
-        "type": "http",
-        "method": "POST",
-        "path": PATH,
-        "headers": [(b"x-openclaw-secret", SECRET.encode())],
-        "query_string": b"",
-    }
+    request = _make_request(body, headers={"X-OpenClaw-Secret": SECRET})
 
-    async def receive() -> dict:
-        return {"type": "http.request", "body": body, "more_body": False}
+    with pytest.raises(HTTPException) as exc:
+        await security.verify_openclaw_webhook(request)
+    assert exc.value.status_code == 401
 
-    request = Request(scope, receive)
+
+async def test_static_secret_header_accepted_in_legacy_dev(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        security,
+        "get_settings",
+        lambda: SimpleNamespace(
+            openclaw_shared_secret=SECRET,
+            is_production=False,
+            openclaw_require_hmac=False,
+            openclaw_max_clock_skew_seconds=300,
+            webhook_max_body_bytes=10_485_760,
+            rate_limit_enabled=False,
+        ),
+    )
+    body = json.dumps({"event_id": "e1"}).encode()
+    request = _make_request(body, headers={"X-OpenClaw-Secret": SECRET})
     result = await security.verify_openclaw_webhook(request)
     assert result == body

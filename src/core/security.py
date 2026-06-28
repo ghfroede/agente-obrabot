@@ -102,7 +102,7 @@ async def verify_openclaw_webhook(request: Request) -> bytes:
     if not secret:
         return body
 
-    if static_secret and hmac.compare_digest(static_secret, secret):
+    if not require_hmac and static_secret and hmac.compare_digest(static_secret, secret):
         return body
 
     if require_hmac or signature:

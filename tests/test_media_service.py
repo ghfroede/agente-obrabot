@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -31,6 +31,7 @@ async def test_ingest_media_photo(monkeypatch: pytest.MonkeyPatch) -> None:
         AsyncMock(return_value="uma parede de tijolos"),
     )
     session = AsyncMock()
+    session.add = MagicMock()
     ref = MediaRef(kind=PHOTO, file_id="F1", mime_type="image/jpeg")
 
     summary = await media_service.ingest_media(session, obra_id="OBRA-001", ref=ref, data=b"img")
@@ -50,6 +51,7 @@ async def test_ingest_media_audio(monkeypatch: pytest.MonkeyPatch) -> None:
         AsyncMock(return_value="executamos alvenaria hoje"),
     )
     session = AsyncMock()
+    session.add = MagicMock()
     ref = MediaRef(kind=AUDIO, file_id="A1", mime_type="audio/ogg")
 
     summary = await media_service.ingest_media(session, obra_id="OBRA-001", ref=ref, data=b"snd")
@@ -62,6 +64,7 @@ async def test_ingest_media_audio(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_ingest_media_document_only_arquivo(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_common(monkeypatch)
     session = AsyncMock()
+    session.add = MagicMock()
     ref = MediaRef(kind=DOCUMENTO, file_id="D1", file_name="planilha.xlsx")
 
     summary = await media_service.ingest_media(session, obra_id="OBRA-001", ref=ref, data=b"doc")
