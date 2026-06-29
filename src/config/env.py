@@ -9,6 +9,12 @@ def _parse_csv_ids(value: str) -> frozenset[str]:
     return frozenset(part.strip() for part in value.split(",") if part.strip())
 
 
+def _parse_csv_ints(value: str) -> list[int]:
+    if not value.strip():
+        return []
+    return [int(part.strip()) for part in value.split(",") if part.strip()]
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -23,9 +29,13 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     cors_origin: str = "*"
+    obrabot_api_key: str = ""
 
     database_url: str = "postgresql+asyncpg://obrabot:obrabot@localhost:5432/obrabot"
     redis_url: str = "redis://localhost:6379/0"
+    rq_job_timeout_seconds: int = 900
+    rq_retry_max: int = 3
+    rq_retry_intervals_seconds: str = "30,120,300"
 
     @property
     def async_database_url(self) -> str:
@@ -35,6 +45,10 @@ class Settings(BaseSettings):
         if url.startswith("postgres://"):
             return url.replace("postgres://", "postgresql+asyncpg://", 1)
         return url
+
+    @property
+    def rq_retry_intervals(self) -> list[int]:
+        return _parse_csv_ints(self.rq_retry_intervals_seconds)
 
     openclaw_shared_secret: str = ""
     openclaw_require_hmac: bool = False

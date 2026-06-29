@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from rq import Retry
 
 from src.schemas.domain import OpenClawTelegramPayload, TelegramChat, TelegramEvent
 from src.services import entrada_service
@@ -66,3 +67,44 @@ async def test_ingest_telegram_duplicate_returns_cached(monkeypatch: pytest.Monk
     assert result == cached
     # Caminho duplicado não deve persistir nada.
     session.add.assert_not_called()
+
+
+def test_enqueue_entrada_uses_configured_timeout_and_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeQueue:
+        def __init__(self, name: str, connection: object) -> None:
+            captured["queue_name"] = name
+            captured["connection"] = connection
+
+        def enqueue(self, *args: object, **kwargs: object) -> None:
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+
+    monkeypatch.setattr(entrada_service.Redis, "from_url", lambda _url: "redis-conn")
+    monkeypatch.setattr(entrada_service, "Queue", FakeQueue)
+    monkeypatch.setattr(
+        entrada_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            redis_url="redis://localhost:6379/0",
+            rq_job_timeout_seconds=123,
+            rq_retry_max=3,
+            rq_retry_intervals=[30, 120, 300],
+        ),
+    )
+
+    entrada_service.enqueue_entrada("entrada-1")
+
+    assert captured["queue_name"] == "obrabot"
+    assert captured["connection"] == "redis-conn"
+    assert captured["args"] == ("src.worker.jobs.process_entrada", "entrada-1")
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["job_timeout"] == 123
+    retry = kwargs["retry"]
+    assert isinstance(retry, Retry)
+    assert retry.max == 3
+    assert retry.intervals == [30, 120, 300]

@@ -32,6 +32,7 @@ uv run alembic upgrade head
 # Railway
 railway logs --service api --lines 200
 railway logs --service worker --lines 200
+railway logs --service OpenClaw --lines 200
 ```
 
 ## Redeployar
@@ -39,10 +40,45 @@ railway logs --service worker --lines 200
 ```bash
 railway up -s api --detach -m "Redeploy API"
 railway up -s worker --detach -m "Redeploy worker"
+railway service redeploy OpenClaw
 
 # Verificar deployment
 railway deployment list --json
 ```
+
+## OpenClaw no Railway
+
+O serviço `OpenClaw` roda no mesmo projeto Railway, com domínio HTTPS próprio, proxy HTTP na porta `8080` e volume persistente montado em `/data`.
+
+Variáveis esperadas no serviço `OpenClaw`:
+
+- `OBRABOT_API_URL=https://<api-domain>`
+- `OPENCLAW_SHARED_SECRET` referenciando `api.OPENCLAW_SHARED_SECRET`
+- `TELEGRAM_BOT_TOKEN` referenciando `worker.TELEGRAM_BOT_TOKEN`
+- `OPENAI_API_KEY` referenciando `worker.OPENAI_API_KEY`
+- `OPENCLAW_STATE_DIR=/data/.openclaw`
+- `OPENCLAW_WORKSPACE_DIR=/data/workspace`
+- `OPENCLAW_GATEWAY_PORT=8080`
+- `SETUP_PASSWORD` e `OPENCLAW_GATEWAY_TOKEN` gerados no Railway
+
+Não configure `DATABASE_URL`, `REDIS_URL` nem `S3_*` no OpenClaw. Ele deve chamar apenas a API pública do Obrabot com HMAC.
+
+Setup inicial:
+
+```bash
+# Acesse pelo navegador:
+https://<openclaw-domain>/setup
+```
+
+O wizard é protegido por `SETUP_PASSWORD`, disponível nas variáveis do serviço `OpenClaw` no dashboard Railway. Não copie esse segredo para arquivos do repositório.
+
+Validação do contrato OpenClaw → Obrabot:
+
+```bash
+railway run --service api uv run python scripts/smoke_openclaw.py https://<api-domain>
+```
+
+Esse smoke usa `OPENCLAW_SHARED_SECRET` e a allowlist Telegram do serviço `api`, assina o payload com HMAC e espera `202 Accepted`. O worker deve concluir `process_entrada` logo depois.
 
 ## Escalar worker
 
@@ -63,6 +99,7 @@ Reinicie/redeploy o worker após alterar variáveis.
 
 ```bash
 # Nunca commitar .env com valores reais
+railway variable set OBRABOT_API_KEY=... --service api
 railway variable set OPENAI_API_KEY=sk-... --service worker
 railway variable set OPENAI_API_KEY=sk-... --service api  # se necessário
 
@@ -70,14 +107,24 @@ railway variable set OPENAI_API_KEY=sk-... --service api  # se necessário
 railway variable set OPENCLAW_SHARED_SECRET=... --service api
 railway variable set OPENCLAW_REQUIRE_HMAC=true --service api
 
+# OpenClaw deve referenciar o mesmo segredo do api, não duplicar manualmente
+railway variable set OBRABOT_API_URL=https://<api-domain> --service OpenClaw
+
 # S3 / MEGA S4
 railway variable set S3_ENDPOINT_URL=... --service worker
 railway variable set S3_ACCESS_KEY_ID=... --service worker
 railway variable set S3_SECRET_ACCESS_KEY=... --service worker
 railway variable set S3_BUCKET_NAME=bucket-construtora --service worker
+
+# RQ worker — ajuste se LLM/S3 demorarem mais que o padrão
+railway variable set RQ_JOB_TIMEOUT_SECONDS=900 --service api
+railway variable set RQ_RETRY_MAX=3 --service api
+railway variable set RQ_RETRY_INTERVALS_SECONDS=30,120,300 --service api
 ```
 
 Referencie `DATABASE_URL` e `REDIS_URL` das variáveis dos serviços Postgres/Redis no dashboard.
+
+Com `APP_ENV=production` ou `NODE_ENV=production`, a API não publica `/docs`, `/redoc` nem `/openapi.json`.
 
 ## Diagnosticar erros comuns
 
@@ -85,10 +132,14 @@ Referencie `DATABASE_URL` e `REDIS_URL` das variáveis dos serviços Postgres/Re
 |---------|----------------|------|
 | `/health` 503 postgres | `DATABASE_URL` incorreta ou migration pendente | Verificar referência + `alembic upgrade head` |
 | `/health` 503 redis | `REDIS_URL` incorreta | Referenciar Redis service |
+| Rotas HTTP retornam `401` | `X-Obrabot-API-Key` ausente/incorreto | Enviar header com `OBRABOT_API_KEY`; `/health` e OpenClaw não usam esse header |
+| Rotas HTTP retornam `500` com `OBRABOT_API_KEY` | Variável ausente na `api` | Definir `OBRABOT_API_KEY` no serviço `api` |
 | Task / `EntradaBruta` stuck em `queued`/`received` | Worker offline | Logs worker, verificar Redis |
 | OpenClaw responde `202` mas nada acontece | Worker offline / fila parada | Ver `EntradaBruta.status` no banco + logs worker |
 | Task `failed` ou `EntradaBruta.status=failed` | LLM timeout ou S3 error | Ver `error` em `GET /tasks/:id` / logs worker |
 | OpenClaw `401` | HMAC/timestamp/`X-Event-Id` inválido ou uso de `X-OpenClaw-Secret` em produção | Conferir assinatura canônica e relógio (±5 min) |
+| OpenClaw `/setup` retorna `401` | Wizard protegido | Usar `SETUP_PASSWORD` do serviço `OpenClaw` no Railway |
+| OpenClaw `configured: false` nos logs | Setup inicial ainda não concluído | Acessar `/setup` e finalizar pareamento/configuração |
 | Crash loop API | Porta errada | Usar `$PORT`, host `0.0.0.0` |
 | Worker SIGTERM | Deploy rolling | Normal; RQ re-enfileira job não ack |
 

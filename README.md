@@ -47,9 +47,10 @@ make dev-worker
 ```bash
 curl -X POST http://localhost:8000/tasks \
   -H "Content-Type: application/json" \
+  -H "X-Obrabot-API-Key: $OBRABOT_API_KEY" \
   -d '{"input":{"message":"Hoje executamos alvenaria no pav 2","obra_id":"OBRA-001","author":"Engenheiro 01"}}'
 
-curl http://localhost:8000/tasks/<taskId>
+curl -H "X-Obrabot-API-Key: $OBRABOT_API_KEY" http://localhost:8000/tasks/<taskId>
 ```
 
 ## Scripts
@@ -72,8 +73,11 @@ Veja `.env.example`. Obrigatórias em produção:
 
 - `DATABASE_URL` — PostgreSQL (Railway injeta automaticamente)
 - `REDIS_URL` — Redis (Railway injeta automaticamente)
+- `OBRABOT_API_KEY` — exigida no header `X-Obrabot-API-Key` para rotas HTTP públicas, exceto `/health` e OpenClaw
 - `OPENCLAW_SHARED_SECRET` + `OPENCLAW_REQUIRE_HMAC=true` — assinatura HMAC do webhook OpenClaw
 - `OPENAI_API_KEY` — para triagem via LLM (sem chave, usa heurística)
+
+Em produção, `/docs`, `/redoc` e `/openapi.json` ficam desabilitados.
 
 Opcionais:
 

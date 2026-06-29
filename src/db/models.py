@@ -13,6 +13,7 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -38,6 +39,10 @@ class Base(DeclarativeBase):
 
 class Task(Base):
     __tablename__ = "tasks"
+    __table_args__ = (
+        Index("ix_tasks_input_gin", "input", postgresql_using="gin"),
+        Index("ix_tasks_result_gin", "result", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     status: Mapped[TaskStatus] = mapped_column(
@@ -58,6 +63,7 @@ class Task(Base):
 
 class Obra(Base):
     __tablename__ = "obras"
+    __table_args__ = (Index("ix_obras_metadata_json_gin", "metadata_json", postgresql_using="gin"),)
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     nome: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -72,6 +78,9 @@ class Obra(Base):
 
 class TelegramMessage(Base):
     __tablename__ = "telegram_messages"
+    __table_args__ = (
+        Index("ix_telegram_messages_raw_payload_gin", "raw_payload", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     event_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
@@ -86,6 +95,9 @@ class TelegramMessage(Base):
 
 class Arquivo(Base):
     __tablename__ = "arquivos"
+    __table_args__ = (
+        Index("ix_arquivos_metadata_json_gin", "metadata_json", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
@@ -105,6 +117,9 @@ class Arquivo(Base):
 
 class Documento(Base):
     __tablename__ = "documentos"
+    __table_args__ = (
+        Index("ix_documentos_metadata_json_gin", "metadata_json", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
@@ -132,6 +147,9 @@ class Documento(Base):
 
 class Triagem(Base):
     __tablename__ = "triagens"
+    __table_args__ = (
+        Index("ix_triagens_campos_extraidos_gin", "campos_extraidos", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
@@ -153,6 +171,10 @@ class Triagem(Base):
 
 class Foto(Base):
     __tablename__ = "fotos"
+    __table_args__ = (
+        Index("ix_fotos_tags_gin", "tags", postgresql_using="gin"),
+        Index("ix_fotos_metadata_json_gin", "metadata_json", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
@@ -166,6 +188,13 @@ class Foto(Base):
 
 class AudioTranscricao(Base):
     __tablename__ = "audios_transcricoes"
+    __table_args__ = (
+        Index(
+            "ix_audios_transcricoes_metadata_json_gin",
+            "metadata_json",
+            postgresql_using="gin",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
@@ -178,6 +207,9 @@ class AudioTranscricao(Base):
 
 class AuditoriaEvento(Base):
     __tablename__ = "auditoria_eventos"
+    __table_args__ = (
+        Index("ix_auditoria_eventos_detalhes_gin", "detalhes", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     obra_id: Mapped[str | None] = mapped_column(
@@ -206,7 +238,10 @@ class Aprovacao(Base):
 
 class OrcamentoItem(Base):
     __tablename__ = "orcamento_itens"
-    __table_args__ = (UniqueConstraint("obra_id", "codigo", name="uq_orcamento_obra_codigo"),)
+    __table_args__ = (
+        UniqueConstraint("obra_id", "codigo", name="uq_orcamento_obra_codigo"),
+        Index("ix_orcamento_itens_metadata_json_gin", "metadata_json", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
@@ -222,6 +257,13 @@ class OrcamentoItem(Base):
 
 class CronogramaAtividade(Base):
     __tablename__ = "cronograma_atividades"
+    __table_args__ = (
+        Index(
+            "ix_cronograma_atividades_metadata_json_gin",
+            "metadata_json",
+            postgresql_using="gin",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
@@ -236,6 +278,9 @@ class CronogramaAtividade(Base):
 
 class Medicao(Base):
     __tablename__ = "medicoes"
+    __table_args__ = (
+        Index("ix_medicoes_metadata_json_gin", "metadata_json", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
@@ -257,6 +302,9 @@ class EntradaBruta(Base):
     """
 
     __tablename__ = "entradas_brutas"
+    __table_args__ = (
+        Index("ix_entradas_brutas_raw_payload_gin", "raw_payload", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     source: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
@@ -286,6 +334,9 @@ class IdempotencyKey(Base):
     """
 
     __tablename__ = "idempotency_keys"
+    __table_args__ = (
+        Index("ix_idempotency_keys_response_json_gin", "response_json", postgresql_using="gin"),
+    )
 
     key: Mapped[str] = mapped_column(String(512), primary_key=True, index=True)
     event_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)

@@ -15,6 +15,15 @@ import httpx
 PATH = "/api/v1/openclaw/telegram-event"
 
 
+def _first_csv_int(name: str, default: int | None = None) -> int | None:
+    values = os.environ.get(name, "")
+    for item in values.split(","):
+        item = item.strip()
+        if item:
+            return int(item)
+    return default
+
+
 def _sign(secret: str, timestamp: str, event_id: str, body: bytes, base: str) -> str:
     body_hash = hashlib.sha256(body).hexdigest()
     canonical = "\n".join([timestamp, event_id, "POST", PATH, body_hash]).encode()
@@ -25,14 +34,23 @@ def main() -> int:
     base = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
     secret = os.environ.get("OPENCLAW_SHARED_SECRET", "")
     event_id = f"smoke-{uuid.uuid4().hex[:12]}"
+    chat_id = _first_csv_int("TELEGRAM_ALLOWED_CHAT_IDS", 999999)
+    user_id = _first_csv_int("TELEGRAM_ALLOWED_USER_IDS")
+    thread_id = _first_csv_int("TELEGRAM_ALLOWED_THREAD_IDS")
+    telegram: dict[str, object] = {
+        "message_id": 1,
+        "chat": {"id": chat_id, "type": "group" if chat_id and chat_id < 0 else "private"},
+        "text": "smoke test openclaw",
+    }
+    if user_id is not None:
+        telegram["from"] = {"id": user_id, "username": "smoke"}
+    if thread_id is not None:
+        telegram["message_thread_id"] = thread_id
+
     payload = {
         "event_id": event_id,
         "obra_id": "OBRA-SMOKE",
-        "telegram": {
-            "message_id": 1,
-            "chat": {"id": 999999, "type": "private"},
-            "text": "smoke test openclaw",
-        },
+        "telegram": telegram,
     }
     body = json.dumps(payload).encode()
     headers: dict[str, str] = {"Content-Type": "application/json"}

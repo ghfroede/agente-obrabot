@@ -29,6 +29,12 @@
 ## Arquitetura Railway
 
 ```
+┌─────────────┐
+│  OpenClaw   │
+│  (público)  │
+└──────┬──────┘
+       │ POST /api/v1/openclaw/telegram-event (HMAC)
+       ▼
 ┌─────────────┐     ┌─────────┐     ┌──────────────┐
 │  api        │────▶│  redis  │────▶│  worker      │
 │  (público)  │     │ (fila)  │     │  (privado)   │
@@ -47,6 +53,7 @@
 |---------|------|---------|---------------|
 | `api` | App (repo) | Sim | `.venv/bin/python -m uvicorn src.api.server:app --host 0.0.0.0 --port $PORT` |
 | `worker` | App (repo) | Não | `.venv/bin/python -m src.worker.index` |
+| `OpenClaw` | Template Railway | Sim | Template `openclaw`, proxy HTTP na porta `8080` |
 | `postgres` | Template Railway | Não | — |
 | `redis` | Template Railway | Não | — |
 
@@ -56,8 +63,9 @@
 |----------|--------|
 | `postgres` | Estado persistente: tarefas, obras, futuras tabelas do plano |
 | `redis` | Fila RQ entre API e worker; retries e coordenação |
+| `openclaw` | Gateway/assistente Telegram com setup web e estado persistente em volume `/data` |
 
-**Não** usamos template de app genérico — o código do agente foi criado do zero neste repositório.
+O código principal do agente fica neste repositório. O OpenClaw roda como serviço separado e não deve receber credenciais de banco ou S3; ele só precisa chamar a API pública assinando HMAC.
 
 ## Por que Postgres e Redis
 
@@ -102,9 +110,22 @@ pip install uv && uv sync --frozen --no-dev
 |----------|---------|-------------|
 | `DATABASE_URL` | api, worker | Sim (referência Postgres) |
 | `REDIS_URL` | api, worker | Sim (referência Redis) |
+| `RQ_JOB_TIMEOUT_SECONDS` | api | Não (default `900`; aplicado no enqueue) |
+| `RQ_RETRY_MAX` | api | Não (default `3`; aplicado no enqueue) |
+| `RQ_RETRY_INTERVALS_SECONDS` | api | Não (default `30,120,300`; aplicado no enqueue) |
+| `OBRABOT_API_KEY` | api | **Sim em produção** (rotas públicas não-OpenClaw) |
 | `OPENAI_API_KEY` | worker | Recomendada (heurística sem chave) |
 | `OPENCLAW_SHARED_SECRET` | api | **Sim em produção** (segredo usado para HMAC do webhook) |
 | `OPENCLAW_REQUIRE_HMAC` | api | **Sim em produção** (`true`; `X-OpenClaw-Secret` é legado apenas para dev sem HMAC obrigatório) |
+| `OBRABOT_API_URL` | OpenClaw | Sim (`https://<api-domain>`) |
+| `OPENCLAW_SHARED_SECRET` | OpenClaw | Sim (referência para `api.OPENCLAW_SHARED_SECRET`) |
+| `TELEGRAM_BOT_TOKEN` | OpenClaw | Sim (referência para `worker.TELEGRAM_BOT_TOKEN`) |
+| `OPENAI_API_KEY` | OpenClaw | Sim para o setup/agente (referência para `worker.OPENAI_API_KEY`) |
+| `SETUP_PASSWORD` | OpenClaw | Sim (gerado no Railway; usar apenas para acessar `/setup`) |
+| `OPENCLAW_GATEWAY_TOKEN` | OpenClaw | Sim (gerado no Railway) |
+| `OPENCLAW_STATE_DIR` | OpenClaw | Sim (`/data/.openclaw`) |
+| `OPENCLAW_WORKSPACE_DIR` | OpenClaw | Sim (`/data/workspace`) |
+| `OPENCLAW_GATEWAY_PORT` / `PORT` | OpenClaw | Sim (`8080`) |
 | `TELEGRAM_BOT_TOKEN` | worker | Recomendada (download de mídia foto/áudio/documento via getFile) |
 | `TELEGRAM_REPLY_ENABLED` | worker | Não (default `false`; `true` ativa resposta de status ao engenheiro) |
 | `TELEGRAM_API_BASE` | worker | Não (default `https://api.telegram.org`) |
@@ -140,6 +161,14 @@ railway add --database redis --json
 railway add --service api --json
 railway add --service worker --json
 
+# OpenClaw (template Railway, cria domínio e volume /data)
+railway deploy -t openclaw \
+  -v 'SETUP_PASSWORD=${{ secret() }}' \
+  -v 'OPENCLAW_GATEWAY_TOKEN=${{ secret() }}' \
+  -v 'OPENCLAW_STATE_DIR=/data/.openclaw' \
+  -v 'OPENCLAW_WORKSPACE_DIR=/data/workspace' \
+  -v 'PORT=8080'
+
 # Deploy por serviço
 railway up -s api --detach -m "Deploy API"
 railway up -s worker --detach -m "Deploy worker"
@@ -162,11 +191,14 @@ curl https://<api-domain>/health
 - [ ] Migrations executadas (pre-deploy API)
 - [ ] Worker sem domínio público
 - [ ] API com domínio HTTPS Railway
+- [ ] OpenClaw com domínio HTTPS Railway, porta `8080` e volume `/data`
+- [ ] OpenClaw `/setup` protegido por `SETUP_PASSWORD` (401 sem credencial)
+- [ ] OpenClaw não possui variáveis `DATABASE_URL`, `REDIS_URL` nem `S3_*`
 - [ ] Secrets não aparecem nos logs
 
 ## Limitações conhecidas
 
-- OpenClaw/Telegram **ativo** para texto e mídia (foto/áudio/documento; download no worker — Sprint 3). Resposta de status ao engenheiro é opt-in (`TELEGRAM_REPLY_ENABLED`)
+- OpenClaw/Telegram **ativo** para texto e mídia (foto/áudio/documento; download no worker — Sprint 3). O serviço OpenClaw precisa ter o setup inicial concluído em `/setup`. Resposta de status ao engenheiro é opt-in (`TELEGRAM_REPLY_ENABLED`)
 - HMAC é obrigatório em produção; `X-OpenClaw-Secret` é aceito apenas como legado em desenvolvimento sem HMAC obrigatório
 - Triagem heurística quando `OPENAI_API_KEY` ausente
 - S3 opcional — sem credenciais, entrada bruta vai ao bucket local (`.local-bucket`)

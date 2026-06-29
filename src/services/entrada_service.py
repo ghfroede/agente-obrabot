@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from redis import Redis
-from rq import Queue
+from rq import Queue, Retry
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -67,7 +67,17 @@ def enqueue_entrada(entrada_id: str) -> None:
     settings = get_settings()
     redis_conn = Redis.from_url(settings.redis_url)
     queue = Queue("obrabot", connection=redis_conn)
-    queue.enqueue("src.worker.jobs.process_entrada", entrada_id, job_timeout=600)
+    retry = (
+        Retry(max=settings.rq_retry_max, interval=settings.rq_retry_intervals)
+        if settings.rq_retry_max > 0
+        else None
+    )
+    queue.enqueue(
+        "src.worker.jobs.process_entrada",
+        entrada_id,
+        job_timeout=settings.rq_job_timeout_seconds,
+        retry=retry,
+    )
 
 
 async def ingest_telegram(

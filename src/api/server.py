@@ -3,10 +3,11 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.api.deps import require_api_key
 from src.api.routes.documentos import router as documentos_router
 from src.api.routes.fotos import router as fotos_router
 from src.api.routes.health import router as health_router
@@ -34,7 +35,15 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="Obrabot API", version="0.1.0", lifespan=lifespan)
+    docs_enabled = not settings.is_production
+    app = FastAPI(
+        title="Obrabot API",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.cors_origin] if settings.cors_origin != "*" else ["*"],
@@ -43,14 +52,16 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(health_router)
-    app.include_router(tasks_router)
     app.include_router(openclaw_router)
-    app.include_router(triagem_router)
-    app.include_router(obras_router)
-    app.include_router(documentos_router)
-    app.include_router(fotos_router)
-    app.include_router(orcamento_router)
-    app.include_router(medicoes_router)
+
+    protected_dependencies = [Depends(require_api_key)]
+    app.include_router(tasks_router, dependencies=protected_dependencies)
+    app.include_router(triagem_router, dependencies=protected_dependencies)
+    app.include_router(obras_router, dependencies=protected_dependencies)
+    app.include_router(documentos_router, dependencies=protected_dependencies)
+    app.include_router(fotos_router, dependencies=protected_dependencies)
+    app.include_router(orcamento_router, dependencies=protected_dependencies)
+    app.include_router(medicoes_router, dependencies=protected_dependencies)
 
     @app.exception_handler(NotFoundError)
     async def not_found_handler(_request: Request, exc: NotFoundError) -> JSONResponse:
