@@ -28,3 +28,7 @@ class BucketConflictError(ObrabotError):
 
 class ApprovalRequiredError(ObrabotError):
     pass
+
+
+class AdminLoginRequired(ObrabotError):
+    """Sessão de admin ausente — exige redirect para o login do painel."""

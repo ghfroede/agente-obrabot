@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 from src.api.deps import require_api_key
+from src.api.routes.admin import router as admin_router
 from src.api.routes.documentos import router as documentos_router
 from src.api.routes.entradas import router as entradas_router
 from src.api.routes.fotos import router as fotos_router
@@ -20,6 +24,7 @@ from src.api.routes.tasks import router as tasks_router
 from src.api.routes.triagem import router as triagem_router
 from src.config.env import get_settings
 from src.core.errors import (
+    AdminLoginRequired,
     ApprovalRequiredError,
     ForbiddenError,
     NotFoundError,
@@ -27,6 +32,9 @@ from src.core.errors import (
     RateLimitError,
     UnauthorizedError,
 )
+
+# server.py em src/api/server.py → parent = src/api ; parent.parent = src/.
+_STATIC_ADMIN = Path(__file__).resolve().parent.parent / "static" / "admin"
 
 
 @asynccontextmanager
@@ -52,8 +60,27 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Sessão do painel admin (cookie assinado). Chave efetiva resolvida aqui (não como
+    # default da Settings, por causa do @lru_cache). Fail-closed em produção.
+    session_secret = settings.session_secret or (
+        settings.obrabot_api_key if not settings.is_production else ""
+    )
+    if not session_secret and settings.is_production:
+        raise RuntimeError(
+            "SESSION_SECRET (ou OBRABOT_API_KEY) obrigatório para o painel admin em produção"
+        )
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=session_secret,
+        https_only=settings.is_production,
+        same_site="lax",
+    )
+    app.mount("/admin/static", StaticFiles(directory=str(_STATIC_ADMIN)), name="admin-static")
+
     app.include_router(health_router)
     app.include_router(openclaw_router)
+    app.include_router(admin_router)
 
     protected_dependencies = [Depends(require_api_key)]
     app.include_router(tasks_router, dependencies=protected_dependencies)
@@ -84,6 +111,12 @@ def create_app() -> FastAPI:
     @app.exception_handler(ApprovalRequiredError)
     async def approval_handler(_request: Request, exc: ApprovalRequiredError) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    @app.exception_handler(AdminLoginRequired)
+    async def admin_login_required_handler(
+        _request: Request, _exc: AdminLoginRequired
+    ) -> RedirectResponse:
+        return RedirectResponse("/admin/login", status_code=303)
 
     @app.exception_handler(ObrabotError)
     async def obrabot_error_handler(_request: Request, exc: ObrabotError) -> JSONResponse:

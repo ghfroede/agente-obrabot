@@ -1,0 +1,29 @@
+{% extends "admin/base.html" %}
+{% block title %}{% if editar %}Editar obra{% else %}Nova obra{% endif %} — Painel Obrabot{% endblock %}
+{% block content %}
+<h1>{% if editar %}Editar obra{% else %}Nova obra{% endif %}</h1>
+<div class="card" style="max-width: 520px;">
+  {% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+  <form method="post"
+        action="{% if editar %}/admin/obras/{{ obra.id }}/editar{% else %}/admin/obras/nova{% endif %}">
+    <label for="id">ID</label>
+    {% if editar %}
+      <input type="text" id="id" value="{{ obra.id }}" readonly />
+    {% else %}
+      <input type="text" id="id" name="id" required pattern="[A-Za-z0-9][A-Za-z0-9_-]*" />
+    {% endif %}
+
+    <label for="nome">Nome</label>
+    <input type="text" id="nome" name="nome" required
+           value="{% if obra %}{{ obra.nome }}{% endif %}" />
+
+    <label for="status">Status</label>
+    <select id="status" name="status">
+      <option value="ativa" {% if obra and obra.status == "ativa" %}selected{% endif %}>ativa</option>
+      <option value="inativa" {% if obra and obra.status == "inativa" %}selected{% endif %}>inativa</option>
+    </select>
+
+    <p><button type="submit">Salvar</button> <a href="/admin/obras">Cancelar</a></p>
+  </form>
+</div>
+{% endblock %}

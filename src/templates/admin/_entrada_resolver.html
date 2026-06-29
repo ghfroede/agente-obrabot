@@ -1,0 +1,9 @@
+<div id="entrada-resolver">
+  {% if erro %}
+    <p class="erro">{{ erro }}</p>
+  {% elif sucesso %}
+    <p class="sucesso">Obra {{ result.obra_id }} vinculada. Entrada reenfileirada para processamento.</p>
+  {% else %}
+    <p>Status atual: <span class="badge">{{ result.status }}</span></p>
+  {% endif %}
+</div>

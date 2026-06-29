@@ -1,0 +1,18 @@
+{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+<table>
+  <thead><tr><th>ID</th><th>Origem</th><th>Status</th><th>Obra</th><th>Autor</th><th>Criada em</th></tr></thead>
+  <tbody>
+  {% for e in entradas %}
+    <tr>
+      <td><a href="/admin/entradas/{{ e.id }}">{{ e.id }}</a></td>
+      <td>{{ e.source }}</td>
+      <td><span class="badge">{{ e.status }}</span></td>
+      <td>{{ e.obra_id or "—" }}</td>
+      <td>{{ e.author or "—" }}</td>
+      <td>{{ e.created_at or "—" }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6">Nenhuma entrada encontrada.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>

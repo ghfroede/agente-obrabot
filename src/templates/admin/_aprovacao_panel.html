@@ -1,0 +1,7 @@
+<div id="aprovacao-panel">
+  {% if result.aprovado %}
+    <p class="sucesso">Documento aprovado. Status: <span class="badge">{{ result.status }}</span></p>
+  {% else %}
+    <p class="erro">Documento reprovado. Status: <span class="badge">{{ result.status }}</span></p>
+  {% endif %}
+</div>

@@ -1,0 +1,16 @@
+{% extends "admin/base.html" %}
+{% block title %}Obras — Painel Obrabot{% endblock %}
+{% block content %}
+<h1>Obras</h1>
+<p><a href="/admin/obras/nova">+ Nova obra</a></p>
+<table>
+  <thead><tr><th>ID</th><th>Nome</th><th>Status</th><th>Ações</th></tr></thead>
+  <tbody>
+  {% for obra in obras %}
+    {% include "admin/_obra_row.html" %}
+  {% else %}
+    <tr><td colspan="4">Nenhuma obra cadastrada.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
