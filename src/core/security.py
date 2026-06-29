@@ -27,10 +27,11 @@ def _header(request: Request, *names: str) -> str | None:
 
 def _ensure_secret_configured() -> None:
     settings = get_settings()
-    if settings.is_production and not settings.openclaw_shared_secret:
+    hmac_required = settings.is_production or settings.openclaw_require_hmac
+    if hmac_required and not settings.openclaw_shared_secret:
         raise HTTPException(
             status_code=500,
-            detail="OPENCLAW_SHARED_SECRET obrigatório em produção",
+            detail="OPENCLAW_SHARED_SECRET obrigatório quando HMAC é obrigatório",
         )
     if not settings.openclaw_shared_secret and not settings.is_production:
         logger.warning(

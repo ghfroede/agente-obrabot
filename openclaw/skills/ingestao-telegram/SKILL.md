@@ -20,7 +20,7 @@ X-OpenClaw-Timestamp: {iso8601_utc}        # ex.: 2026-06-28T12:00:00Z (janela d
 X-OpenClaw-Event-Id: {event_id}            # DEVE ser igual ao event_id do corpo
 ```
 
-Headers legados aceitos: `X-Timestamp`, `X-Event-Id`. `X-OpenClaw-Secret` (segredo estático) é **legado** — use apenas em ambientes sem HMAC.
+Headers legados aceitos: `X-Timestamp`, `X-Event-Id`. `X-OpenClaw-Secret` (segredo estático) é **legado** — use apenas em desenvolvimento sem HMAC obrigatório.
 
 ## Cálculo da assinatura
 
@@ -45,7 +45,7 @@ canonical = "\n".join([timestamp, event_id, "POST", path, body_hash]).encode()
 signature = hmac.new(secret.encode(), canonical, hashlib.sha256).hexdigest()
 ```
 
-> O backend recusa (401) se a assinatura, o timestamp (>5 min) ou o `X-Event-Id` (≠ `payload.event_id`) não baterem. Quando `OPENCLAW_SHARED_SECRET` está vazio no servidor, a verificação é ignorada (somente dev).
+> O backend recusa (401) se a assinatura, o timestamp (>5 min) ou o `X-Event-Id` (≠ `payload.event_id`) não baterem. Quando `OPENCLAW_REQUIRE_HMAC=true` ou `APP_ENV=production`, `OPENCLAW_SHARED_SECRET` vazio falha fechado.
 
 ## Payload mínimo
 

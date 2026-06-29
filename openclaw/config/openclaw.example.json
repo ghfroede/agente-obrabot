@@ -18,7 +18,12 @@
   },
   "backend": {
     "baseUrl": "${OBRABOT_API_URL}",
-    "sharedSecretHeader": "X-OpenClaw-Signature",
-    "sharedSecret": "${OPENCLAW_SHARED_SECRET}"
+    "hmac": {
+      "enabled": true,
+      "secret": "${OPENCLAW_SHARED_SECRET}",
+      "signatureHeader": "X-OpenClaw-Signature",
+      "timestampHeader": "X-OpenClaw-Timestamp",
+      "eventIdHeader": "X-OpenClaw-Event-Id"
+    }
   }
 }

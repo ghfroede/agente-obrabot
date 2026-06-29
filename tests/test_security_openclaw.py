@@ -56,6 +56,27 @@ async def test_secret_empty_fails_in_production(monkeypatch: pytest.MonkeyPatch)
     assert "OPENCLAW_SHARED_SECRET" in exc.value.detail
 
 
+async def test_secret_empty_fails_when_hmac_required_in_development(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        security,
+        "get_settings",
+        lambda: SimpleNamespace(
+            openclaw_shared_secret="",
+            is_production=False,
+            openclaw_require_hmac=True,
+            openclaw_max_clock_skew_seconds=300,
+            webhook_max_body_bytes=10_485_760,
+            rate_limit_enabled=False,
+        ),
+    )
+    with pytest.raises(HTTPException) as exc:
+        await security.verify_openclaw_webhook(_make_request())
+    assert exc.value.status_code == 500
+    assert "OPENCLAW_SHARED_SECRET" in exc.value.detail
+
+
 async def test_secret_empty_allowed_in_development_with_warning(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
