@@ -1,0 +1,18 @@
+{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+<table>
+  <thead><tr><th>ID</th><th>Tipo</th><th>Título</th><th>Status</th><th>Obra</th><th>Criado em</th></tr></thead>
+  <tbody>
+  {% for d in documentos %}
+    <tr>
+      <td><a href="/admin/documentos/{{ d.id }}">{{ d.id }}</a></td>
+      <td>{{ d.tipo }}</td>
+      <td>{{ d.titulo }}</td>
+      <td><span class="badge">{{ d.status.value }}</span></td>
+      <td>{{ d.obra_id }}</td>
+      <td>{{ d.created_at or "—" }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6">Nenhum documento encontrado.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>

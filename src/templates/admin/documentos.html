@@ -1,0 +1,18 @@
+{% extends "admin/base.html" %}
+{% block title %}Documentos — Painel Obrabot{% endblock %}
+{% block content %}
+<h1>Documentos</h1>
+<form method="get" action="/admin/documentos">
+  <label for="status">Filtrar por status</label>
+  <select id="status" name="status" onchange="this.form.submit()">
+    <option value="">Todos</option>
+    {% for s in statuses %}
+      <option value="{{ s }}" {% if status_atual == s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <noscript><button type="submit">Filtrar</button></noscript>
+</form>
+<div id="documentos-resultado">
+  {% include "admin/_documentos_table.html" %}
+</div>
+{% endblock %}

@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     port: int = 8000
     cors_origin: str = "*"
     obrabot_api_key: str = ""
+    admin_password: str = ""
+    session_secret: str = ""
 
     database_url: str = "postgresql+asyncpg://obrabot:obrabot@localhost:5432/obrabot"
     redis_url: str = "redis://localhost:6379/0"
@@ -71,6 +73,7 @@ class Settings(BaseSettings):
     rate_limit_user_per_minute: int = 30
     rate_limit_chat_per_minute: int = 120
     rate_limit_window_seconds: int = 60
+    admin_login_max_per_minute: int = 5
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"

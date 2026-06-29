@@ -1,0 +1,38 @@
+{% extends "admin/base.html" %}
+{% block title %}Entrada {{ entrada.id }} — Painel Obrabot{% endblock %}
+{% block content %}
+<h1>Entrada</h1>
+<p><a href="/admin/entradas">&larr; Voltar</a></p>
+
+<div class="card">
+  <p><strong>ID:</strong> {{ entrada.id }}</p>
+  <p><strong>Origem:</strong> {{ entrada.source }}</p>
+  <p><strong>Status:</strong> <span class="badge">{{ entrada.status }}</span></p>
+  <p><strong>Obra:</strong> {{ entrada.obra_id or "—" }}</p>
+  <p><strong>Autor:</strong> {{ entrada.author or "—" }}</p>
+  <p><strong>Criada em:</strong> {{ entrada.created_at or "—" }}</p>
+  <p><strong>Texto:</strong> {{ entrada.text or "—" }}</p>
+</div>
+
+{% if is_pending %}
+<div class="card">
+  <h2>Resolver obra</h2>
+  <form hx-post="/admin/entradas/{{ entrada.id }}/resolver-obra"
+        hx-target="#entrada-resolver" hx-swap="outerHTML">
+    <label for="obra_id">Obra</label>
+    <select id="obra_id" name="obra_id" required>
+      {% for o in obras %}
+        <option value="{{ o.id }}">{{ o.id }} — {{ o.nome }}</option>
+      {% endfor %}
+    </select>
+    <p><button type="submit">Vincular obra</button></p>
+  </form>
+  <div id="entrada-resolver"></div>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Payload bruto</h2>
+  <pre>{{ raw_json }}</pre>
+</div>
+{% endblock %}

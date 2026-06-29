@@ -9,6 +9,10 @@ from src.core.errors import RateLimitError
 
 logger = logging.getLogger(__name__)
 
+# Janela dedicada do login admin (anti brute-force). Não herda a janela de OpenClaw
+# para manter o limite baixo e previsível mesmo se a config geral mudar.
+ADMIN_LOGIN_WINDOW_SECONDS = 60
+
 
 def _redis() -> Redis:
     return Redis.from_url(get_settings().redis_url)
@@ -50,3 +54,24 @@ def check_openclaw_limits(
     if not client.set(event_key, "1", nx=True, ex=window * 10):
         logger.warning("rate_limit duplicate event_id=%s", event_id)
         raise RateLimitError("Evento já recebido recentemente")
+
+
+def check_admin_login_limit(*, ip: str) -> None:
+    """Limita tentativas de login do painel admin por IP (anti brute-force).
+
+    Limite DEDICADO e baixo (``admin_login_max_per_minute``, default 5) por janela de
+    ``ADMIN_LOGIN_WINDOW_SECONDS`` (60s). NÃO herda ``rate_limit_user_per_minute`` (30/min),
+    permissivo demais para uma senha única.
+    """
+    settings = get_settings()
+    if not settings.rate_limit_enabled:
+        return
+
+    client = _redis()
+    key = f"rate:admin:login:{ip}"
+    count = client.incr(key)
+    if count == 1:
+        client.expire(key, ADMIN_LOGIN_WINDOW_SECONDS)
+    if count > settings.admin_login_max_per_minute:
+        logger.warning("rate_limit admin login ip=%s count=%s", ip, count)
+        raise RateLimitError("Muitas tentativas de login. Tente novamente em instantes.")

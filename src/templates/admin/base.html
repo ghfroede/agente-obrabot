@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Painel Obrabot{% endblock %}</title>
+  <script src="/admin/static/htmx.min.js"></script>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; background: #f7fafc; color: #1a202c; }
+    nav { background: #1a365d; color: #fff; padding: 0.75rem 1.5rem; display: flex; gap: 1.25rem; align-items: center; }
+    nav a { color: #fff; text-decoration: none; font-weight: 600; }
+    nav a:hover { text-decoration: underline; }
+    nav .spacer { flex: 1; }
+    nav form { margin: 0; }
+    nav button { background: transparent; border: 1px solid #fff; color: #fff; padding: 0.3rem 0.7rem; border-radius: 4px; cursor: pointer; }
+    main { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
+    h1 { color: #1a365d; }
+    table { border-collapse: collapse; width: 100%; background: #fff; }
+    th, td { border: 1px solid #e2e8f0; padding: 0.5rem 0.75rem; text-align: left; }
+    th { background: #edf2f7; }
+    pre { background: #1a202c; color: #f7fafc; padding: 1rem; border-radius: 6px; overflow: auto; }
+    .erro { color: #c53030; font-weight: 600; }
+    .sucesso { color: #2f855a; font-weight: 600; }
+    .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 10px; background: #e2e8f0; font-size: 0.85rem; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+    button, input[type=submit] { cursor: pointer; }
+    form.inline { display: inline; margin: 0; }
+    label { display: block; margin: 0.5rem 0 0.2rem; font-weight: 600; }
+    input[type=text], input[type=password], select, textarea { padding: 0.4rem; width: 100%; max-width: 420px; box-sizing: border-box; }
+  </style>
+</head>
+<body>
+  {% if request.session.get("admin") %}
+  <nav>
+    <a href="/admin">Dashboard</a>
+    <a href="/admin/obras">Obras</a>
+    <a href="/admin/entradas">Entradas</a>
+    <a href="/admin/documentos">Documentos</a>
+    <span class="spacer"></span>
+    <form method="post" action="/admin/logout">
+      <button type="submit">Sair</button>
+    </form>
+  </nav>
+  {% endif %}
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

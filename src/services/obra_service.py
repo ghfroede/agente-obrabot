@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.errors import NotFoundError
 from src.db.models import Obra
 from src.schemas.obras import ObraCreate
 from src.utils.filenames import obra_slug
@@ -34,6 +35,16 @@ async def upsert_obra(session: AsyncSession, payload: ObraCreate) -> Obra:
     obra.slug = obra_slug(payload.nome)
     obra.status = payload.status
     obra.metadata_json = payload.metadata_json
+    await session.flush()
+    return obra
+
+
+async def set_status(session: AsyncSession, obra_id: str, status: str) -> Obra:
+    """Atualiza o ``status`` da obra (só flush — a rota commita). 404 se ausente."""
+    obra = await session.get(Obra, obra_id)
+    if obra is None:
+        raise NotFoundError(f"Obra {obra_id} não encontrada")
+    obra.status = status
     await session.flush()
     return obra
 

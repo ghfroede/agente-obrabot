@@ -1,0 +1,48 @@
+{% extends "admin/base.html" %}
+{% block title %}Documento {{ documento.id }} — Painel Obrabot{% endblock %}
+{% block content %}
+<h1>Documento</h1>
+<p><a href="/admin/documentos">&larr; Voltar</a></p>
+
+<div class="card">
+  <p><strong>ID:</strong> {{ documento.id }}</p>
+  <p><strong>Tipo:</strong> {{ documento.tipo }}</p>
+  <p><strong>Título:</strong> {{ documento.titulo }}</p>
+  <p><strong>Status:</strong> <span class="badge">{{ documento.status.value }}</span></p>
+  <p><strong>Obra:</strong> {{ documento.obra_id }}</p>
+  <p><strong>Revisão:</strong> {{ documento.revisao }}</p>
+</div>
+
+<div class="card">
+  <h2>Triagem</h2>
+  {% if triagem %}
+    <p><strong>Tipo documento:</strong> {{ triagem.tipo_documento }}</p>
+    <p><strong>Confiança:</strong> {{ triagem.confianca }}</p>
+    <p><strong>Resumo:</strong> {{ triagem.resumo }}</p>
+    <p><strong>Ação sugerida:</strong> {{ triagem.acao_sugerida or "—" }}</p>
+    <p><strong>Precisa aprovação:</strong> {{ triagem.precisa_aprovacao }}</p>
+    <p><strong>Campos extraídos:</strong></p>
+    <pre>{{ triagem.campos_extraidos | tojson(indent=2) }}</pre>
+  {% else %}
+    <p>Sem triagem associada.</p>
+  {% endif %}
+</div>
+
+{% if aguardando_aprovacao %}
+<div class="card">
+  <h2>Aprovação</h2>
+  <form hx-post="/admin/documentos/{{ documento.id }}/aprovar"
+        hx-target="#aprovacao-panel" hx-swap="outerHTML">
+    <label for="aprovador">Aprovador</label>
+    <input type="text" id="aprovador" name="aprovador" value="engenheiro" />
+    <label for="comentario">Comentário</label>
+    <textarea id="comentario" name="comentario" rows="2"></textarea>
+    <p>
+      <button type="submit" name="aprovado" value="true">Aprovar</button>
+      <button type="submit" name="aprovado" value="false">Reprovar</button>
+    </p>
+  </form>
+  <div id="aprovacao-panel"></div>
+</div>
+{% endif %}
+{% endblock %}

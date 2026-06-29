@@ -1,0 +1,14 @@
+<tr id="obra-row-{{ obra.id }}">
+  <td>{{ obra.id }}</td>
+  <td>{{ obra.nome }}</td>
+  <td><span class="badge">{{ obra.status }}</span></td>
+  <td>
+    <a href="/admin/obras/{{ obra.id }}/editar">Editar</a>
+    <form class="inline" hx-post="/admin/obras/{{ obra.id }}/status"
+          hx-target="#obra-row-{{ obra.id }}" hx-swap="outerHTML">
+      <button type="submit">
+        {% if obra.status == "ativa" %}Desativar{% else %}Ativar{% endif %}
+      </button>
+    </form>
+  </td>
+</tr>

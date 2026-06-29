@@ -1,0 +1,30 @@
+{% extends "admin/base.html" %}
+{% block title %}Dashboard — Painel Obrabot{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="card">
+  <h2>Pendências</h2>
+  <p>Documentos aguardando aprovação: <span class="badge">{{ counts.aguardando_aprovacao }}</span></p>
+  <p>Entradas <code>pending_obra</code> em aberto:
+    <a href="/admin/entradas?status=pending_obra"><span class="badge">{{ counts.pending_obra }}</span></a>
+  </p>
+</div>
+
+<div class="card">
+  <h2>Entradas por status</h2>
+  <table>
+    <thead><tr><th>Status</th><th>Total</th></tr></thead>
+    <tbody>
+    {% for status, total in counts.entradas_por_status.items() %}
+      <tr>
+        <td><a href="/admin/entradas?status={{ status }}">{{ status }}</a></td>
+        <td>{{ total }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="2">Nenhuma entrada registrada.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
