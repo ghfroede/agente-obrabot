@@ -17,6 +17,8 @@ Todo canal grava `EntradaBruta` (status `received`) ANTES da IA e enfileira `pro
 
 `run_ceo_pipeline`/`process_task` são legado. Núcleo: `src/services/entrada_service.py`.
 
+Painel admin `/admin` (`src/api/routes/admin.py`): server-rendered, auth por sessão (`SessionMiddleware`, **não** `require_api_key`); guard `require_admin_session` interrompe via `raise AdminLoginRequired`. Leituras em `src/services/admin_service.py`; mutações reusam `obra_service`/`entrada_service`/`approval_service`.
+
 ## Onde editar
 
 - Núcleo de ingestão: `src/services/entrada_service.py`
