@@ -126,6 +126,37 @@ Referencie `DATABASE_URL` e `REDIS_URL` das variáveis dos serviços Postgres/Re
 
 Com `APP_ENV=production` ou `NODE_ENV=production`, a API não publica `/docs`, `/redoc` nem `/openapi.json`.
 
+## Cadastrar obras iniciais
+
+Antes de usar o Telegram em operação real, cadastre pelo menos uma obra. As rotas de obras são administrativas e exigem `X-Obrabot-API-Key`; portanto, `OBRABOT_API_KEY` precisa estar definida no serviço `api`.
+
+```bash
+railway variable set OBRABOT_API_KEY=... --service api
+```
+
+Exemplo em PowerShell:
+
+```powershell
+$env:OBRABOT_API_KEY="..."
+$headers = @{
+  "Content-Type" = "application/json"
+  "X-Obrabot-API-Key" = $env:OBRABOT_API_KEY
+}
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/obras" `
+  -Headers $headers `
+  -Body '{"id":"OBRA-001","nome":"Nome da Obra"}'
+
+Invoke-RestMethod `
+  -Method Get `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/obras" `
+  -Headers $headers
+```
+
+Enquanto houver apenas uma obra operacional, configure o OpenClaw/CEO para preencher esse `obra_id` em todas as mensagens encaminhadas. Mensagens sem obra clara devem ser tratadas como pendência de confirmação antes de gerar documento oficial.
+
 ## Diagnosticar erros comuns
 
 | Sintoma | Causa provável | Ação |
