@@ -34,7 +34,7 @@ class TelegramEvent(BaseModel):
 
 class OpenClawTelegramPayload(BaseModel):
     event_id: str
-    obra_id: str
+    obra_id: str | None = Field(default=None, max_length=32)
     obra_nome: str | None = None
     telegram: TelegramEvent
     raw: dict[str, Any] = Field(default_factory=dict)
@@ -70,6 +70,10 @@ class RdoDraftRequest(BaseModel):
     obra_id: str
     data_ref: str
     conteudo: dict[str, Any] = Field(default_factory=dict)
+
+
+class ResolveEntradaObraRequest(BaseModel):
+    obra_id: str = Field(min_length=1, max_length=32)
 
 
 class RdoApproveRequest(BaseModel):

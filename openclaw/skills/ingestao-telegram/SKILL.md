@@ -49,6 +49,8 @@ signature = hmac.new(secret.encode(), canonical, hashlib.sha256).hexdigest()
 
 ## Payload mínimo
 
+Quando a obra for conhecida, envie `obra_id` com uma obra previamente cadastrada no backend:
+
 ```json
 {
   "event_id": "uuid-unico",
@@ -60,6 +62,8 @@ signature = hmac.new(secret.encode(), canonical, hashlib.sha256).hexdigest()
   }
 }
 ```
+
+Se a obra não estiver clara, envie o evento sem `obra_id`. O backend salvará a entrada como `pending_obra`, não chamará IA, não criará documento oficial e retornará uma mensagem com as obras ativas para confirmação humana.
 
 Reenvio do mesmo `event_id` + mesmo conteúdo retorna o resultado em cache (idempotência).
 
@@ -84,4 +88,17 @@ Requer `TELEGRAM_BOT_TOKEN` no worker. Falha ao baixar uma mídia não derruba a
 
 ## Resposta
 
-`202 Accepted` com `{ "status": "queued", "entrada_id": "...", "event_id": "...", "obra_id": "..." }`. A triagem roda de forma assíncrona no worker — não espere o resultado da classificação na resposta do webhook.
+`202 Accepted` com:
+
+- `{ "status": "queued", "entrada_id": "...", "event_id": "...", "obra_id": "..." }` quando a obra existe e o processamento foi enfileirado.
+- `{ "status": "pending_obra", "entrada_id": "...", "obras_disponiveis": [...], "mensagem": "..." }` quando falta obra ou o `obra_id` informado não está cadastrado.
+
+Para resolver uma pendência, chame a API administrativa:
+
+```
+POST {OBRABOT_API_URL}/api/v1/entradas/{entrada_id}/resolver-obra
+Header: X-Obrabot-API-Key: {OBRABOT_API_KEY}
+Body: { "obra_id": "OBRA-001" }
+```
+
+A triagem roda de forma assíncrona no worker — não espere o resultado da classificação na resposta do webhook.

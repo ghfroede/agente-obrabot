@@ -2,14 +2,14 @@
 
 ## Veredito
 
-O Obrabot esta tecnicamente estavel para continuar, mas o proximo bloqueio de produto nao e Telegram nem worker: e o cadastro e a resolucao de obras.
+O Obrabot esta tecnicamente estavel para continuar. A auditoria identificou que o bloqueio de produto imediato era o cadastro e a resolucao de obras.
 
-O backend ja processa entradas quando um `obra_id` chega no payload. Porem, nao ha ainda um fluxo operacional completo para:
+O GHF-233 tratou esse bloqueio no codigo:
 
-- cadastrar obras reais antes do uso;
-- listar/selecionar obra pelo OpenClaw quando o engenheiro nao informa `obra_id`;
-- impedir que mensagens reais sejam associadas a obras placeholders como `SEM_OBRA`;
-- orientar o operador a criar uma obra pelo caminho correto.
+- obras reais passam a ser cadastradas antes do uso por API administrativa tipada;
+- OpenClaw pode enviar mensagens sem `obra_id`, que ficam em `pending_obra`;
+- entradas sem obra resolvida nao entram na fila de IA e nao geram documento oficial;
+- o operador pode resolver a obra depois pelo endpoint de resolucao e entao enfileirar o processamento.
 
 ## Estado Verificado
 
@@ -71,54 +71,45 @@ Invoke-RestMethod `
   -Body '{"id":"OBRA-001","nome":"Nome da Obra"}'
 ```
 
-### P0 — Nao existe onboarding de obras
+### P0 — Onboarding de obras
 
-O codigo possui `POST /api/v1/obras`, mas ele aceita `dict` generico e nao existe script/guia de seed para criar as obras iniciais.
+Diagnostico original:
 
-Evidencia:
+- `src/api/routes/obras.py` criava obra com payload generico.
+- Nao existia script/guia de seed para criar as obras iniciais.
+- `src/services/ingestao_service.py::ensure_obra` auto-criava obra quando um `obra_id` chegava.
 
-- `src/api/routes/obras.py` cria obra com `payload["id"]` e `payload["nome"]`.
-- `src/services/ingestao_service.py::ensure_obra` auto-cria a obra quando um `obra_id` chega.
+Estado apos GHF-233:
 
-Impacto:
+- `/api/v1/obras` usa schemas Pydantic tipados.
+- `scripts/seed_obras.py` cadastra obras iniciais pela API administrativa.
+- `/tasks` rejeita `obra_id` ausente ou desconhecido.
+- OpenClaw aceita entrada sem obra, mantendo status `pending_obra`.
 
-- Se o OpenClaw nao souber qual `obra_id` usar, o payload nem valida, porque `OpenClawTelegramPayload.obra_id` e obrigatorio.
-- Se a API `/tasks` for usada sem `obra_id`, o sistema cai em `SEM_OBRA`, o que nao serve para operacao real.
-- Auto-criacao e util para idempotencia e testes, mas nao substitui cadastro operacional.
+Correcao aplicada:
 
-Correcao recomendada:
+1. Criados schemas Pydantic para obras (`ObraCreate`, `ObraResponse`).
+2. Criado `scripts/seed_obras.py`.
+3. Documentado cadastro inicial em `docs/operations.md`.
+4. Definida convencao operacional de IDs como `OBRA-001`, `OBRA-002`.
 
-1. Criar schemas Pydantic para obras (`ObraCreate`, `ObraResponse`).
-2. Criar script `scripts/seed_obras.py` para cadastrar obras reais via API ou diretamente via banco em ambiente controlado.
-3. Documentar cadastro inicial em `docs/operations.md`.
-4. Definir convencao de IDs: `OBRA-001`, `OBRA-002`, etc.
+### P0 — Resolucao de obra no OpenClaw
 
-### P0 — Payload OpenClaw exige `obra_id`
+Diagnostico original:
 
-O schema atual exige:
+- Mensagens naturais como "Hoje concretamos a laje" nao entravam se o gateway nao preenchesse `obra_id`.
+- A decisao de obra estava deslocada para o OpenClaw, sem API/fluxo de resolucao no backend.
 
-```python
-class OpenClawTelegramPayload(BaseModel):
-    event_id: str
-    obra_id: str
-    obra_nome: str | None = None
-    telegram: TelegramEvent
-```
+Estado apos GHF-233:
 
-Impacto:
+- `obra_id` e opcional no payload OpenClaw.
+- Entrada sem obra ou com obra desconhecida fica `pending_obra`.
+- O backend retorna a lista de obras ativas e uma mensagem de orientacao.
+- `/api/v1/entradas/{entrada_id}/resolver-obra` vincula uma obra cadastrada e enfileira a entrada.
 
-- Mensagens naturais como "Hoje concretamos a laje" nao entram se o gateway nao preencher `obra_id`.
-- A decisao de obra esta hoje deslocada para o OpenClaw, mas o backend nao oferece API/fluxo de resolucao de obra.
+Regra mantida:
 
-Correcao recomendada:
-
-1. Manter `obra_id` obrigatorio para documentos finais e RDO.
-2. Permitir entrada bruta sem obra clara em uma fase controlada, com status `pendente_obra`.
-3. Criar endpoint/fluxo de resolucao:
-   - listar obras ativas;
-   - sugerir obra por texto, alias ou contexto;
-   - responder no Telegram pedindo confirmacao quando ambigua.
-4. So processar documento oficial depois que a obra estiver resolvida.
+Documento final, RDO e triagem oficial so podem acontecer depois que a obra estiver resolvida.
 
 ### P1 — RDO ainda nao tem agregador diario
 
@@ -145,14 +136,15 @@ Recomendacao:
 - Usar issues recentes como fonte de verdade operacional.
 - Atualizar/criar documento Linear de estado atual apos resolver o cadastro de obras.
 
-## Como Resolver o Problema das Obras Agora
+## Como Usar o Fluxo de Obras Agora
 
-Curto prazo:
+Operacao inicial:
 
 1. Configurar `OBRABOT_API_KEY` no servico `api`.
-2. Cadastrar pelo menos uma obra real via `POST /api/v1/obras`.
-3. Configurar o OpenClaw/CEO para usar esse `obra_id` unico por enquanto.
-4. Rodar teste real no Telegram mencionando explicitamente o ID da obra.
+2. Cadastrar pelo menos uma obra real via `POST /api/v1/obras` ou `scripts/seed_obras.py`.
+3. Configurar o OpenClaw/CEO para usar esse `obra_id` unico quando ele conseguir identificar a obra.
+4. Quando a mensagem chegar sem obra, resolver pelo endpoint `/api/v1/entradas/{entrada_id}/resolver-obra`.
+5. Rodar teste real no Telegram mencionando explicitamente o ID da obra e outro teste sem ID.
 
 Exemplo de mensagem:
 
@@ -160,20 +152,28 @@ Exemplo de mensagem:
 OBRA-001: hoje executamos alvenaria no pavimento 2.
 ```
 
-Medio prazo:
+Proximas evolucoes:
 
-1. Implementar cadastro de obras com schema tipado e aliases.
-2. Implementar resolucao de obra quando a mensagem vier sem `obra_id`.
-3. Implementar estado `pendente_obra` para entradas que precisam de confirmacao humana.
-4. So iniciar Sprint 4/RDO depois que texto e midia estiverem associados a uma obra real.
+1. Adicionar aliases/apelidos de obra para sugestao automatica.
+2. Automatizar pergunta de confirmacao pelo Telegram quando houver ambiguidade.
+3. Iniciar Sprint 4/RDO depois que texto e midia estiverem associados a uma obra real.
 
 ## Ordem Recomendada de Desenvolvimento
 
 1. `P0` Configurar `OBRABOT_API_KEY` em producao.
-2. `P0` Criar fluxo de cadastro/seed de obras.
-3. `P0` Adaptar OpenClaw para usar obra unica inicial ou perguntar a obra quando faltar.
-4. `P0` Rodar e registrar smoke real Telegram com obra real.
+2. `P0` Cadastrar obra real inicial.
+3. `P0` Rodar e registrar smoke real Telegram com obra real.
+4. `P0` Rodar e registrar smoke real Telegram sem obra para validar `pending_obra`.
 5. `P1` Implementar agregador de RDO diario.
 6. `P1` Implementar aprovacao/reprovacao por Telegram.
 7. `P1` Finalizar RDO com PDF + metadata + hash.
 
+## Atualização GHF-233
+
+Implementacao entregue para resolver esta auditoria:
+
+- `/api/v1/obras` com schemas Pydantic tipados.
+- `scripts/seed_obras.py` para cadastro inicial via API administrativa.
+- Webhook OpenClaw aceitando `obra_id` opcional.
+- Entrada sem obra ou com obra desconhecida fica `pending_obra`, sem fila/IA/documento oficial.
+- `/api/v1/entradas/{entrada_id}/resolver-obra` para vincular uma obra cadastrada e enfileirar o processamento.

@@ -15,6 +15,8 @@ async def run_ceo_pipeline(task_input: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Campo 'message' é obrigatório")
 
     obra_id = task_input.get("obra_id")
+    if not obra_id:
+        raise ValueError("Campo 'obra_id' é obrigatório para triagem oficial")
     author = task_input.get("author")
     channel = task_input.get("channel", "api")
 
@@ -22,7 +24,7 @@ async def run_ceo_pipeline(task_input: dict[str, Any]) -> dict[str, Any]:
     storage_uri: str | None = None
     if settings.s3_configured:
         storage_uri = persist_raw_entry(
-            obra_id=obra_id or "SEM_OBRA",
+            obra_id=str(obra_id),
             message=message,
             metadata={
                 "author": author,

@@ -14,16 +14,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config.env import get_settings
 from src.core.constants import DocumentStatus
 from src.db.client import AsyncSessionLocal
-from src.db.models import Documento, EntradaBruta, Task, TaskStatus, TelegramMessage
+from src.db.models import Documento, EntradaBruta, Obra, Task, TaskStatus, TelegramMessage
 from src.schemas.domain import OpenClawTelegramPayload
 from src.services import (
     audit_service,
     bucket_service,
     ingestao_service,
     media_service,
+    obra_service,
     openai_service,
     telegram_media_service,
 )
+
+PENDING_OBRA_STATUS = "pending_obra"
+PENDING_OBRA_IDEMPOTENCY_SCOPE = "__PENDING_OBRA__"
 
 
 def content_hash(*parts: str) -> str:
@@ -34,7 +38,7 @@ async def create_entrada_bruta(
     session: AsyncSession,
     *,
     source: str,
-    obra_id: str,
+    obra_id: str | None,
     text: str,
     raw_payload: dict[str, Any] | None = None,
     author: str | None = None,
@@ -42,6 +46,7 @@ async def create_entrada_bruta(
     event_id: str | None = None,
     idempotency_key: str | None = None,
     task_id: uuid.UUID | None = None,
+    status: str = "received",
 ) -> EntradaBruta:
     """Cria a entrada bruta (status=received) — fonte única de ingestão de qualquer canal."""
     entrada = EntradaBruta(
@@ -53,8 +58,8 @@ async def create_entrada_bruta(
         channel=channel,
         text=text,
         raw_payload=raw_payload,
-        hash_sha256=content_hash(source, obra_id, text or ""),
-        status="received",
+        hash_sha256=content_hash(source, obra_id or "", text or ""),
+        status=status,
         task_id=task_id,
     )
     session.add(entrada)
@@ -87,9 +92,18 @@ async def ingest_telegram(
 
     Não roda IA aqui — o processamento pesado vai para a fila RQ (``process_entrada``).
     """
-    obra = await ingestao_service.ensure_obra(session, payload.obra_id, payload.obra_nome)
     tg = payload.telegram
     text = tg.text or tg.caption or ""
+    obra_id = (payload.obra_id or "").strip().upper()
+    if not obra_id:
+        return await _ingest_telegram_pending_obra(session, payload, text)
+
+    obra = await session.get(Obra, obra_id)
+    if obra is None:
+        return await _ingest_telegram_pending_obra(
+            session, payload, text, requested_obra_id=obra_id
+        )
+
     chash = content_hash(text, obra.id, str(tg.chat.id))
 
     claim = await ingestao_service.claim_idempotency(
@@ -141,6 +155,147 @@ async def ingest_telegram(
     return result
 
 
+async def _ingest_telegram_pending_obra(
+    session: AsyncSession,
+    payload: OpenClawTelegramPayload,
+    text: str,
+    *,
+    requested_obra_id: str | None = None,
+) -> dict[str, Any]:
+    tg = payload.telegram
+    obra_scope = requested_obra_id or PENDING_OBRA_IDEMPOTENCY_SCOPE
+    chash = content_hash(text, obra_scope, str(tg.chat.id))
+    claim = await ingestao_service.claim_idempotency(
+        session,
+        event_id=payload.event_id,
+        content_hash=chash,
+        obra_id=obra_scope,
+        source="openclaw",
+    )
+    if claim is not None:
+        if claim.status == "completed" and claim.response_json is not None:
+            return claim.response_json
+        return {"status": "duplicate", "event_id": payload.event_id, "estado": claim.status}
+
+    raw = payload.model_dump(mode="json")
+    msg = TelegramMessage(
+        event_id=payload.event_id,
+        obra_id=None,
+        chat_id=tg.chat.id,
+        message_id=tg.message_id,
+        user_id=tg.from_user.id if tg.from_user else None,
+        text=text,
+        raw_payload=raw,
+    )
+    session.add(msg)
+    await session.flush()
+
+    entrada = await create_entrada_bruta(
+        session,
+        source="openclaw",
+        obra_id=None,
+        text=text,
+        raw_payload=raw,
+        author=(tg.from_user.username if tg.from_user else None),
+        channel="telegram",
+        event_id=payload.event_id,
+        idempotency_key=ingestao_service.idempotency_key(
+            payload.event_id, chash, PENDING_OBRA_IDEMPOTENCY_SCOPE
+        ),
+        status=PENDING_OBRA_STATUS,
+    )
+    obras = await obra_service.active_obras_summary(session)
+    result = {
+        "status": PENDING_OBRA_STATUS,
+        "entrada_id": str(entrada.id),
+        "event_id": payload.event_id,
+        "obra_id": None,
+        "obra_id_solicitado": requested_obra_id,
+        "telegram_message_id": str(msg.id),
+        "obras_disponiveis": obras,
+        "mensagem": _pending_obra_message(obras, requested_obra_id=requested_obra_id),
+    }
+    await ingestao_service.complete_idempotency(
+        session,
+        event_id=payload.event_id,
+        content_hash=chash,
+        obra_id=obra_scope,
+        result=result,
+    )
+    await session.commit()
+    return result
+
+
+async def resolve_pending_obra(
+    session: AsyncSession, *, entrada_id: uuid.UUID, obra_id: str
+) -> dict[str, Any]:
+    entrada = await session.get(EntradaBruta, entrada_id)
+    if entrada is None:
+        return {"status": "not_found"}
+    if entrada.status != PENDING_OBRA_STATUS:
+        return {
+            "status": entrada.status,
+            "entrada_id": str(entrada.id),
+            "obra_id": entrada.obra_id,
+            "queued": False,
+        }
+
+    resolved_obra_id = obra_id.strip().upper()
+    obra = await session.get(Obra, resolved_obra_id)
+    if obra is None:
+        return {"status": "obra_not_found", "obra_id": resolved_obra_id}
+
+    entrada.obra_id = obra.id
+    entrada.status = "received"
+    if isinstance(entrada.raw_payload, dict):
+        entrada.raw_payload = {**entrada.raw_payload, "obra_id": obra.id}
+
+    if entrada.event_id:
+        result = await session.execute(
+            select(TelegramMessage).where(TelegramMessage.event_id == entrada.event_id)
+        )
+        msg = result.scalar_one_or_none()
+        if msg is not None:
+            msg.obra_id = obra.id
+            if isinstance(msg.raw_payload, dict):
+                msg.raw_payload = {**msg.raw_payload, "obra_id": obra.id}
+
+    await session.commit()
+    await asyncio.to_thread(enqueue_entrada, str(entrada.id))
+    return {
+        "status": "queued",
+        "entrada_id": str(entrada.id),
+        "obra_id": obra.id,
+        "queued": True,
+    }
+
+
+def _pending_obra_message(
+    obras: list[dict[str, str]], *, requested_obra_id: str | None = None
+) -> str:
+    prefix = (
+        f"A obra {requested_obra_id} não está cadastrada. "
+        if requested_obra_id
+        else "Recebi a mensagem, mas preciso confirmar a obra antes de processar. "
+    )
+    if not obras:
+        return (
+            f"{prefix}Nenhuma obra ativa está cadastrada. "
+            "Cadastre uma obra antes de gerar documento oficial."
+        )
+    if len(obras) == 1:
+        obra = obras[0]
+        return (
+            f"{prefix}"
+            f"Use {obra['id']} ({obra['nome']}) ou responda com o ID da obra."
+        )
+    ids = ", ".join(f"{obra['id']} ({obra['nome']})" for obra in obras[:5])
+    return (
+        f"{prefix}"
+        f"Obras ativas: {ids}. Responda com o ID da obra."
+    )
+
+
 async def run_entrada_pipeline(entrada_id: str) -> dict[str, Any]:
     """Worker: persiste raw (fonte de verdade), classifica e cria Documento/Triagem/Auditoria.
 
@@ -174,6 +329,14 @@ async def run_entrada_pipeline(entrada_id: str) -> dict[str, Any]:
 
 
 async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, Any]:
+    if not entrada.obra_id:
+        return {
+            "entrada_id": str(entrada.id),
+            "status": PENDING_OBRA_STATUS,
+            "obra_id": None,
+            "acao_sugerida": "confirmar_obra",
+        }
+
     obra = await ingestao_service.ensure_obra(session, entrada.obra_id)
 
     # 1. Persiste raw no bucket (FONTE DE VERDADE) ANTES da IA.
@@ -368,6 +531,9 @@ def _build_reply(entrada: EntradaBruta, result: dict[str, Any]) -> tuple[int, st
     chat = telegram.get("chat")
     if not isinstance(chat, dict) or chat.get("id") is None:
         return None
+
+    if result.get("status") == PENDING_OBRA_STATUS:
+        return int(chat["id"]), str(result.get("mensagem") or "Confirme a obra para processar.")
 
     tipo = result.get("tipo_documento", "desconhecido")
     proximo = "aguardando aprovação" if result.get("precisa_aprovacao", True) else "registrado"

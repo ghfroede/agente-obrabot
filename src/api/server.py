@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from src.api.deps import require_api_key
 from src.api.routes.documentos import router as documentos_router
+from src.api.routes.entradas import router as entradas_router
 from src.api.routes.fotos import router as fotos_router
 from src.api.routes.health import router as health_router
 from src.api.routes.medicoes import router as medicoes_router
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks_router, dependencies=protected_dependencies)
     app.include_router(triagem_router, dependencies=protected_dependencies)
     app.include_router(obras_router, dependencies=protected_dependencies)
+    app.include_router(entradas_router, dependencies=protected_dependencies)
     app.include_router(documentos_router, dependencies=protected_dependencies)
     app.include_router(fotos_router, dependencies=protected_dependencies)
     app.include_router(orcamento_router, dependencies=protected_dependencies)

@@ -11,8 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.client import get_async_session
-from src.db.models import Task, TaskStatus
-from src.services import entrada_service, ingestao_service
+from src.db.models import Obra, Task, TaskStatus
+from src.services import entrada_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -51,14 +51,22 @@ async def create_task(
     session: AsyncSession = Depends(get_async_session),
 ) -> TaskResponse:
     inp = body.input
-    obra_id = inp.obra_id or "SEM_OBRA"
+    obra_id = (inp.obra_id or "").strip().upper()
+    if not obra_id:
+        raise HTTPException(
+            status_code=400,
+            detail="obra_id é obrigatório para /tasks; cadastre/selecione uma obra antes.",
+        )
+
+    obra = await session.get(Obra, obra_id)
+    if obra is None:
+        raise HTTPException(status_code=404, detail=f"Obra {obra_id} não cadastrada")
 
     task = Task(status=TaskStatus.QUEUED, input=inp.model_dump())
     session.add(task)
     await session.flush()
 
     # Fluxo unificado: toda ingestão gera uma EntradaBruta antes da IA (Sprint 2).
-    await ingestao_service.ensure_obra(session, obra_id)
     entrada = await entrada_service.create_entrada_bruta(
         session,
         source="api",

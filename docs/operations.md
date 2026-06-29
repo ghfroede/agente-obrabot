@@ -155,7 +155,27 @@ Invoke-RestMethod `
   -Headers $headers
 ```
 
-Enquanto houver apenas uma obra operacional, configure o OpenClaw/CEO para preencher esse `obra_id` em todas as mensagens encaminhadas. Mensagens sem obra clara devem ser tratadas como pendência de confirmação antes de gerar documento oficial.
+Também é possível usar o script operacional:
+
+```bash
+OBRABOT_API_URL=https://api-production-8bfb.up.railway.app \
+OBRABOT_API_KEY=... \
+uv run python scripts/seed_obras.py OBRA-001 "Nome da Obra"
+```
+
+Enquanto houver apenas uma obra operacional, configure o OpenClaw/CEO para preencher esse `obra_id` em todas as mensagens encaminhadas.
+
+Quando uma mensagem chegar sem obra clara, o webhook retorna `status=pending_obra`, salva `EntradaBruta`/`TelegramMessage` sem gerar documento oficial e lista as obras ativas. Após confirmação humana, resolva a pendência:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/entradas/<entrada_id>/resolver-obra" `
+  -Headers $headers `
+  -Body '{"obra_id":"OBRA-001"}'
+```
+
+Essa chamada vincula a entrada à obra e enfileira o processamento assíncrono.
 
 ## Diagnosticar erros comuns
 

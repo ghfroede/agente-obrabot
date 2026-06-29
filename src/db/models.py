@@ -84,7 +84,9 @@ class TelegramMessage(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     event_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
-    obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
+    obra_id: Mapped[str | None] = mapped_column(
+        String(32), ForeignKey("obras.id"), nullable=True, index=True
+    )
     chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
     message_id: Mapped[int] = mapped_column(Integer)
     user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
@@ -310,7 +312,9 @@ class EntradaBruta(Base):
     source: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     event_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
+    obra_id: Mapped[str | None] = mapped_column(
+        String(32), ForeignKey("obras.id"), nullable=True, index=True
+    )
     author: Mapped[str | None] = mapped_column(String(128), nullable=True)
     channel: Mapped[str] = mapped_column(String(32), nullable=False, default="api")
     text: Mapped[str | None] = mapped_column(Text, nullable=True)

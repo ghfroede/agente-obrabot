@@ -41,6 +41,8 @@ make dev-worker
 | POST | `/tasks` | Cria tarefa de triagem |
 | GET | `/tasks/:id` | Consulta status/resultado |
 | POST | `/api/v1/openclaw/telegram-event` | Ingestão Telegram via OpenClaw (HMAC + idempotência) |
+| GET/POST | `/api/v1/obras` | Lista/cadastra obras reais |
+| POST | `/api/v1/entradas/:id/resolver-obra` | Resolve entrada Telegram pendente de obra |
 
 ### Exemplo
 
@@ -95,6 +97,8 @@ Cliente HTTP / Telegram (OpenClaw) → API (público) → EntradaBruta → Redis
 ```
 
 Ingestão unificada: todo canal grava uma `EntradaBruta` e responde rápido (`202`); o worker faz storage + triagem fora do request. Detalhes em [AGENTS.md](AGENTS.md) e `dev/plan-2.md`.
+
+Entradas Telegram sem obra clara ficam com `status=pending_obra` e não geram documento oficial até que uma obra cadastrada seja confirmada.
 
 Documentação detalhada: `docs/railway-deploy-plan.md`, `docs/operations.md` e [`AGENTS.md`](AGENTS.md) (instruções para agentes de IA).
 
