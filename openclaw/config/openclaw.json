@@ -7,17 +7,66 @@
     }
   },
   "skills": {
-    "paths": ["./openclaw/skills"]
+    "paths": ["./openclaw/skills"],
+    "allowExternal": false,
+    "enabled": [
+      "obrabot-api",
+      "ingestao-telegram",
+      "triagem-obra",
+      "rdo",
+      "fotos",
+      "orcamento",
+      "cronograma",
+      "medicoes",
+      "documentos"
+    ]
   },
   "agents": {
     "ceo": {
       "workspace": "./openclaw/agents/ceo",
       "model": "${OPENAI_MODEL}",
-      "skills": ["ingestao-telegram", "triagem-obra"]
+      "skills": ["obrabot-api", "ingestao-telegram", "triagem-obra"],
+      "subagents": ["triagem", "rdo", "fotos", "orcamento", "cronograma", "medicoes", "documentos"]
+    },
+    "triagem": {
+      "workspace": "./openclaw/agents/triagem",
+      "model": "${OPENAI_MODEL}",
+      "skills": ["obrabot-api", "triagem-obra"]
+    },
+    "rdo": {
+      "workspace": "./openclaw/agents/rdo",
+      "model": "${OPENAI_MODEL}",
+      "skills": ["obrabot-api", "rdo", "documentos"]
+    },
+    "fotos": {
+      "workspace": "./openclaw/agents/fotos",
+      "model": "${OPENAI_MODEL}",
+      "skills": ["obrabot-api", "fotos"]
+    },
+    "orcamento": {
+      "workspace": "./openclaw/agents/orcamento",
+      "model": "${OPENAI_MODEL}",
+      "skills": ["obrabot-api", "orcamento"]
+    },
+    "cronograma": {
+      "workspace": "./openclaw/agents/cronograma",
+      "model": "${OPENAI_MODEL}",
+      "skills": ["obrabot-api", "cronograma"]
+    },
+    "medicoes": {
+      "workspace": "./openclaw/agents/medicoes",
+      "model": "${OPENAI_MODEL}",
+      "skills": ["obrabot-api", "medicoes"]
+    },
+    "documentos": {
+      "workspace": "./openclaw/agents/documentos",
+      "model": "${OPENAI_MODEL}",
+      "skills": ["obrabot-api", "documentos", "rdo"]
     }
   },
   "backend": {
     "baseUrl": "${OBRABOT_API_URL}",
+    "apiKey": "${OBRABOT_API_KEY}",
     "hmac": {
       "enabled": true,
       "secret": "${OPENCLAW_SHARED_SECRET}",
