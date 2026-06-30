@@ -7,6 +7,9 @@
 railway.json
 dev/
 
+# Checkout de skills externo (não faz parte do projeto)
+skills-ecc/
+
 # Python
 __pycache__/
 *.py[cod]
