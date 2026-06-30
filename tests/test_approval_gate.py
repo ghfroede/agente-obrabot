@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.api.routes import documentos as documentos_route
 from src.core.constants import DocumentStatus
 from src.core.errors import ApprovalRequiredError, BucketConflictError
 from src.db.models import Aprovacao, Documento, Obra
@@ -68,6 +69,43 @@ def test_final_overwrite_blocked(tmp_path, monkeypatch: pytest.MonkeyPatch) -> N
     bucket_service.put_bytes(key, b"v1", allow_overwrite=False)
     with pytest.raises(BucketConflictError):
         bucket_service.put_bytes(key, b"v2", allow_overwrite=False)
+
+
+@pytest.mark.asyncio
+async def test_rdo_gerar_uses_aggregator_and_creates_draft(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conteudo = {
+        "source_entrada_ids": ["entrada-1"],
+        "source_arquivo_ids": ["arquivo-1"],
+    }
+    aggregate = AsyncMock(return_value=conteudo)
+    create_draft = AsyncMock(
+        return_value={
+            "documento_id": "doc-1",
+            "status": DocumentStatus.RASCUNHO_GERADO.value,
+            "revisao": "REV00",
+            "bucket_uri": "s3://bucket/rdo.html",
+        }
+    )
+    monkeypatch.setattr(documentos_route.rdo_aggregator_service, "aggregate_daily_rdo", aggregate)
+    monkeypatch.setattr(documentos_route.rdo_service, "create_rdo_draft", create_draft)
+    body = documentos_route.RdoGenerateRequest(obra_id="OBRA-001", data_ref="2026-06-27")
+    session = AsyncMock()
+
+    result = await documentos_route.rdo_gerar(body, session)
+
+    aggregate.assert_awaited_once_with(
+        session, obra_id="OBRA-001", data_ref="2026-06-27"
+    )
+    create_draft.assert_awaited_once_with(
+        session,
+        obra_id="OBRA-001",
+        data_ref="2026-06-27",
+        conteudo=conteudo,
+    )
+    assert result["source_entrada_ids"] == ["entrada-1"]
+    assert result["source_arquivo_ids"] == ["arquivo-1"]
 
 
 @pytest.mark.asyncio

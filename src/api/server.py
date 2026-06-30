@@ -21,6 +21,7 @@ from src.api.routes.obras import router as obras_router
 from src.api.routes.openclaw import router as openclaw_router
 from src.api.routes.orcamento import router as orcamento_router
 from src.api.routes.tasks import router as tasks_router
+from src.api.routes.telegram_contextos import router as telegram_contextos_router
 from src.api.routes.triagem import router as triagem_router
 from src.config.env import get_settings
 from src.core.errors import (
@@ -86,6 +87,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks_router, dependencies=protected_dependencies)
     app.include_router(triagem_router, dependencies=protected_dependencies)
     app.include_router(obras_router, dependencies=protected_dependencies)
+    app.include_router(telegram_contextos_router, dependencies=protected_dependencies)
     app.include_router(entradas_router, dependencies=protected_dependencies)
     app.include_router(documentos_router, dependencies=protected_dependencies)
     app.include_router(fotos_router, dependencies=protected_dependencies)

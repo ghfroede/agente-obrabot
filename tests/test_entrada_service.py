@@ -100,6 +100,9 @@ async def test_ingest_telegram_without_obra_creates_pending(
     )
     session = AsyncMock()
     session.add = MagicMock()
+    no_context = MagicMock()
+    no_context.scalar_one_or_none.return_value = None
+    session.execute = AsyncMock(return_value=no_context)
 
     result = await entrada_service.ingest_telegram(session, payload)
 
@@ -119,6 +122,49 @@ async def test_ingest_telegram_without_obra_creates_pending(
     assert metadata["media"][0]["kind"] == "foto"
     enqueue.assert_not_called()
     complete.assert_awaited_once()
+
+
+async def test_ingest_telegram_uses_obra_prefix_and_enqueues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    obra = SimpleNamespace(id="OBRA-001")
+    monkeypatch.setattr(
+        entrada_service.ingestao_service,
+        "claim_idempotency",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        entrada_service.ingestao_service,
+        "complete_idempotency",
+        AsyncMock(),
+    )
+
+    async def fake_to_thread(func: object, *args: object) -> None:
+        assert func == entrada_service.enqueue_entrada
+        assert len(args) == 1
+
+    monkeypatch.setattr(entrada_service.asyncio, "to_thread", fake_to_thread)
+
+    payload = OpenClawTelegramPayload(
+        event_id="evt-prefixo",
+        telegram=TelegramEvent(
+            message_id=1,
+            chat=TelegramChat(id=10, type="group"),
+            text="OBRA-001: concretagem concluída",
+        ),
+    )
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.get = AsyncMock(return_value=obra)
+
+    result = await entrada_service.ingest_telegram(session, payload)
+
+    assert result["status"] == "queued"
+    assert result["obra_id"] == "OBRA-001"
+    assert result["obra_resolution_source"] == "prefixo"
+    entrada = session.add.call_args_list[1].args[0]
+    assert entrada.obra_id == "OBRA-001"
+    assert entrada.metadata_json["obra_resolution_source"] == "prefixo"
 
 
 async def test_ingest_telegram_unknown_obra_creates_pending(

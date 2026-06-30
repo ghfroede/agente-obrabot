@@ -72,6 +72,11 @@ class RdoDraftRequest(BaseModel):
     conteudo: dict[str, Any] = Field(default_factory=dict)
 
 
+class RdoGenerateRequest(BaseModel):
+    obra_id: str
+    data_ref: str
+
+
 class ResolveEntradaObraRequest(BaseModel):
     obra_id: str = Field(min_length=1, max_length=32)
 

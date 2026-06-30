@@ -19,6 +19,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -93,6 +94,42 @@ class TelegramMessage(Base):
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TelegramContexto(Base):
+    __tablename__ = "telegram_contextos"
+    __table_args__ = (
+        Index(
+            "uq_telegram_contextos_chat_root_ativo",
+            "chat_id",
+            unique=True,
+            postgresql_where=text("thread_id IS NULL AND status = 'ativo'"),
+        ),
+        Index(
+            "uq_telegram_contextos_chat_thread_ativo",
+            "chat_id",
+            "thread_id",
+            unique=True,
+            postgresql_where=text("thread_id IS NOT NULL AND status = 'ativo'"),
+        ),
+        Index(
+            "ix_telegram_contextos_metadata_json_gin",
+            "metadata_json",
+            postgresql_using="gin",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    thread_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
+    papel: Mapped[str] = mapped_column(String(64), nullable=False, default="engenheiro")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="ativo", index=True)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Arquivo(Base):

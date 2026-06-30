@@ -92,6 +92,8 @@ async def create_rdo_draft(
     body = html.encode("utf-8")
     uri = bucket_service.put_bytes(key, body, content_type="text/html", allow_overwrite=True)
     file_hash = sha256_hex(body)
+    source_entrada_ids = conteudo.get("source_entrada_ids", [])
+    source_arquivo_ids = conteudo.get("source_arquivo_ids", [])
 
     doc = Documento(
         obra_id=obra_id,
@@ -103,7 +105,13 @@ async def create_rdo_draft(
         bucket_key=key,
         bucket_uri=uri,
         hash_sha256=file_hash,
-        metadata_json={"conteudo": conteudo, "formato": "html"},
+        metadata_json={
+            "conteudo": conteudo,
+            "formato": "html",
+            "source_entrada_ids": source_entrada_ids,
+            "source_arquivo_ids": source_arquivo_ids,
+            "campos_editaveis": conteudo.get("campos_editaveis", {}),
+        },
     )
     session.add(doc)
     await session.flush()
@@ -115,6 +123,8 @@ async def create_rdo_draft(
             "tipo": "rdo",
             "status": doc.status.value,
             "hash_sha256": file_hash,
+            "source_entrada_ids": source_entrada_ids,
+            "source_arquivo_ids": source_arquivo_ids,
         },
     )
     await audit_service.log_event(

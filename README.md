@@ -42,7 +42,9 @@ make dev-worker
 | GET | `/tasks/:id` | Consulta status/resultado |
 | POST | `/api/v1/openclaw/telegram-event` | Ingestão Telegram via OpenClaw (HMAC + idempotência) |
 | GET/POST | `/api/v1/obras` | Lista/cadastra obras reais |
+| GET/POST | `/api/v1/telegram-contextos` | Mapeia chat/tópico Telegram para obra |
 | POST | `/api/v1/entradas/:id/resolver-obra` | Resolve entrada Telegram pendente de obra |
+| POST | `/api/v1/rdo/gerar` | Gera rascunho de RDO a partir das evidências do dia |
 | GET | `/admin` | Painel admin interno (login em `/admin/login`, auth por sessão) |
 
 ### Exemplo

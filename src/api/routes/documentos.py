@@ -8,8 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import get_db
 from src.core.errors import ApprovalRequiredError, NotFoundError
 from src.db.models import Documento
-from src.schemas.domain import ApprovalRequest, RdoApproveRequest, RdoDraftRequest
-from src.services import approval_service, rdo_service
+from src.schemas.domain import (
+    ApprovalRequest,
+    RdoApproveRequest,
+    RdoDraftRequest,
+    RdoGenerateRequest,
+)
+from src.services import approval_service, rdo_aggregator_service, rdo_service
 
 router = APIRouter(prefix="/api/v1", tags=["rdo", "approvals", "documentos"])
 
@@ -30,6 +35,29 @@ async def rdo_rascunho(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ApprovalRequiredError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/rdo/gerar")
+async def rdo_gerar(
+    body: RdoGenerateRequest,
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    conteudo = await rdo_aggregator_service.aggregate_daily_rdo(
+        session,
+        obra_id=body.obra_id,
+        data_ref=body.data_ref,
+    )
+    result = await rdo_service.create_rdo_draft(
+        session,
+        obra_id=body.obra_id,
+        data_ref=body.data_ref,
+        conteudo=conteudo,
+    )
+    return {
+        **result,
+        "source_entrada_ids": conteudo["source_entrada_ids"],
+        "source_arquivo_ids": conteudo["source_arquivo_ids"],
+    }
 
 
 @router.post("/rdo/finalizar")

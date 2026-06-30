@@ -23,6 +23,7 @@ from src.services import (
     media_service,
     obra_service,
     openai_service,
+    telegram_context_service,
     telegram_media_service,
 )
 
@@ -98,14 +99,15 @@ async def ingest_telegram(
     """
     tg = payload.telegram
     text = tg.text or tg.caption or ""
-    obra_id = (payload.obra_id or "").strip().upper()
-    if not obra_id:
-        return await _ingest_telegram_pending_obra(session, payload, text)
-
-    obra = await session.get(Obra, obra_id)
+    resolution = await telegram_context_service.resolve_telegram_obra(session, payload, text)
+    obra = resolution.obra
     if obra is None:
         return await _ingest_telegram_pending_obra(
-            session, payload, text, requested_obra_id=obra_id
+            session,
+            payload,
+            text,
+            requested_obra_id=resolution.requested_obra_id,
+            resolution_source=resolution.source,
         )
 
     chash = content_hash(text, obra.id, str(tg.chat.id))
@@ -119,7 +121,7 @@ async def ingest_telegram(
         return {"status": "duplicate", "event_id": payload.event_id, "estado": claim.status}
 
     raw = payload.model_dump(mode="json")
-    telegram_meta = _telegram_entrada_metadata(raw)
+    telegram_meta = _telegram_entrada_metadata(raw, obra_resolution_source=resolution.source)
     data_ref = _date_from_telegram(raw.get("telegram", {}))
     msg = TelegramMessage(
         event_id=payload.event_id,
@@ -152,6 +154,7 @@ async def ingest_telegram(
         "entrada_id": str(entrada.id),
         "event_id": payload.event_id,
         "obra_id": obra.id,
+        "obra_resolution_source": resolution.source,
         "telegram_message_id": str(msg.id),
     }
     await ingestao_service.complete_idempotency(
@@ -169,6 +172,7 @@ async def _ingest_telegram_pending_obra(
     text: str,
     *,
     requested_obra_id: str | None = None,
+    resolution_source: str = "missing",
 ) -> dict[str, Any]:
     tg = payload.telegram
     obra_scope = requested_obra_id or PENDING_OBRA_IDEMPOTENCY_SCOPE
@@ -186,7 +190,11 @@ async def _ingest_telegram_pending_obra(
         return {"status": "duplicate", "event_id": payload.event_id, "estado": claim.status}
 
     raw = payload.model_dump(mode="json")
-    telegram_meta = _telegram_entrada_metadata(raw, requested_obra_id=requested_obra_id)
+    telegram_meta = _telegram_entrada_metadata(
+        raw,
+        requested_obra_id=requested_obra_id,
+        obra_resolution_source=resolution_source,
+    )
     data_ref = _date_from_telegram(raw.get("telegram", {}))
     msg = TelegramMessage(
         event_id=payload.event_id,
@@ -223,6 +231,7 @@ async def _ingest_telegram_pending_obra(
         "event_id": payload.event_id,
         "obra_id": None,
         "obra_id_solicitado": requested_obra_id,
+        "obra_resolution_source": resolution_source,
         "telegram_message_id": str(msg.id),
         "obras_disponiveis": obras,
         "mensagem": _pending_obra_message(obras, requested_obra_id=requested_obra_id),
@@ -508,7 +517,10 @@ def _date_from_telegram(telegram: dict[str, Any]) -> date | None:
 
 
 def _telegram_entrada_metadata(
-    raw: dict[str, Any], *, requested_obra_id: str | None = None
+    raw: dict[str, Any],
+    *,
+    requested_obra_id: str | None = None,
+    obra_resolution_source: str | None = None,
 ) -> dict[str, Any]:
     telegram = raw.get("telegram")
     if not isinstance(telegram, dict):
@@ -546,6 +558,8 @@ def _telegram_entrada_metadata(
         }
     if requested_obra_id:
         metadata["obra_id_solicitado"] = requested_obra_id
+    if obra_resolution_source:
+        metadata["obra_resolution_source"] = obra_resolution_source
     return metadata
 
 

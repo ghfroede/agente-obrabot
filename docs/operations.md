@@ -183,7 +183,33 @@ OBRABOT_API_KEY=... \
 uv run python scripts/seed_obras.py OBRA-001 "Nome da Obra"
 ```
 
-Enquanto houver apenas uma obra operacional, configure o OpenClaw/CEO para preencher esse `obra_id` em todas as mensagens encaminhadas.
+Enquanto houver apenas uma obra operacional, cadastre também um contexto Telegram para que o backend resolva a obra mesmo quando o OpenClaw não preencher `obra_id`.
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/telegram-contextos" `
+  -Headers $headers `
+  -Body '{"chat_id":-1001234567890,"obra_id":"OBRA-001","papel":"engenheiro","status":"ativo"}'
+```
+
+Para supergrupos com tópicos, preencha `thread_id`:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/telegram-contextos" `
+  -Headers $headers `
+  -Body '{"chat_id":-1001234567890,"thread_id":42,"obra_id":"OBRA-001","papel":"engenheiro","status":"ativo"}'
+```
+
+Ordem de resolução de obra no webhook:
+
+1. `obra_id` vindo do payload OpenClaw.
+2. Prefixo no texto/caption, como `OBRA-001: concretagem concluída`.
+3. Contexto ativo por `chat_id + thread_id`.
+4. Contexto ativo raiz por `chat_id`.
+5. `pending_obra` quando nada resolver.
 
 Quando uma mensagem chegar sem obra clara, o webhook retorna `status=pending_obra`, salva `EntradaBruta`/`TelegramMessage` sem gerar documento oficial e lista as obras ativas. Após confirmação humana, resolva a pendência:
 
@@ -197,9 +223,23 @@ Invoke-RestMethod `
 
 Essa chamada vincula a entrada à obra e enfileira o processamento assíncrono.
 
+## Gerar RDO do dia
+
+Depois que as entradas do dia estiverem processadas, gere um rascunho de RDO a partir das evidências persistidas:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/rdo/gerar" `
+  -Headers $headers `
+  -Body '{"obra_id":"OBRA-001","data_ref":"2026-06-29"}'
+```
+
+O backend agrega `EntradaBruta`, `Triagem`, `Arquivo`, `Foto` e `AudioTranscricao` por `obra_id + data_ref`, gera o conteúdo estruturado e chama o fluxo existente de rascunho. O documento gerado guarda `source_entrada_ids`, `source_arquivo_ids` e `campos_editaveis` em `metadata_json` para revisão humana antes de aprovação/finalização.
+
 ## Estrutura de dados e bucket
 
-O pipeline mantém rastreabilidade explícita entre `EntradaBruta`, `Arquivo`, `Documento` e `Triagem` por `entrada_id`. A migration `008_link_entries_and_operational_metadata` adiciona esses vínculos, além de `data_ref` e `metadata_json` em `entradas_brutas`.
+O pipeline mantém rastreabilidade explícita entre `EntradaBruta`, `Arquivo`, `Documento` e `Triagem` por `entrada_id`. A migration `008_link_entries_and_operational_metadata` adiciona esses vínculos, além de `data_ref` e `metadata_json` em `entradas_brutas`. A migration `009_add_telegram_contextos` adiciona o mapeamento canônico de Telegram para obra.
 
 Após deploy do backend que contém essa migration, aplique:
 
