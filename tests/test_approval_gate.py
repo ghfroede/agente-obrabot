@@ -9,7 +9,7 @@ import pytest
 
 from src.api.routes import documentos as documentos_route
 from src.core.constants import DocumentStatus
-from src.core.errors import ApprovalRequiredError, BucketConflictError
+from src.core.errors import ApprovalRequiredError, BucketConflictError, ValidationError
 from src.db.models import Aprovacao, Documento, Obra
 from src.services import bucket_service, rdo_service
 
@@ -106,6 +106,38 @@ async def test_rdo_gerar_uses_aggregator_and_creates_draft(
     )
     assert result["source_entrada_ids"] == ["entrada-1"]
     assert result["source_arquivo_ids"] == ["arquivo-1"]
+
+
+@pytest.mark.asyncio
+async def test_rdo_aprovar_finalizar_route_calls_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    finalize = AsyncMock(
+        return_value={
+            "documento_id": "doc-1",
+            "status": DocumentStatus.FINALIZADO_VALIDADO.value,
+            "bucket_uri": "s3://bucket/rdo.pdf",
+            "formato": "pdf",
+            "aprovacao": {"aprovado": True, "aprovador": "engenheiro", "comentario": None},
+        }
+    )
+    monkeypatch.setattr(documentos_route.rdo_service, "approve_and_finalize_rdo", finalize)
+    body = documentos_route.RdoApproveFinalizeRequest(
+        documento_id="doc-1",
+        aprovador="engenheiro",
+    )
+    session = AsyncMock()
+
+    result = await documentos_route.rdo_aprovar_finalizar(body, session)
+
+    finalize.assert_awaited_once_with(
+        session,
+        documento_id="doc-1",
+        aprovador="engenheiro",
+        comentario=None,
+    )
+    assert result["status"] == DocumentStatus.FINALIZADO_VALIDADO.value
+    assert result["formato"] == "pdf"
 
 
 @pytest.mark.asyncio
@@ -252,6 +284,30 @@ async def test_finalize_blocked_without_approval_record() -> None:
 
 
 @pytest.mark.asyncio
+async def test_finalize_blocks_non_rdo() -> None:
+    doc_id = uuid.uuid4()
+    doc = Documento(
+        id=doc_id,
+        obra_id="OBRA-001",
+        tipo="orcamento",
+        titulo="Orçamento",
+        data_ref=date(2026, 6, 27),
+        revisao="REV00",
+        status=DocumentStatus.APROVADO,
+        bucket_key="draft.html",
+    )
+    session = AsyncMock()
+    doc_result = MagicMock()
+    doc_result.scalar_one_or_none.return_value = doc
+    session.execute = AsyncMock(return_value=doc_result)
+
+    with pytest.raises(ValidationError, match="RDO"):
+        await rdo_service.finalize_rdo(
+            session, documento_id=str(doc_id), aprovador="engenheiro"
+        )
+
+
+@pytest.mark.asyncio
 async def test_finalize_generates_pdf_when_approved(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
@@ -319,3 +375,77 @@ async def test_finalize_generates_pdf_when_approved(
     assert result["formato"] == "pdf"
     assert result["status"] == DocumentStatus.FINALIZADO_VALIDADO.value
     assert "finalizados_pdf" in (doc.bucket_key or "")
+
+
+@pytest.mark.asyncio
+async def test_approve_and_finalize_rdo_records_single_approval_and_pdf(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    doc_id = uuid.uuid4()
+    obra = Obra(id="OBRA-001", nome="Teste", slug="obra-teste")
+    doc = Documento(
+        id=doc_id,
+        obra_id="OBRA-001",
+        tipo="rdo",
+        titulo="RDO",
+        data_ref=date(2026, 6, 27),
+        revisao="REV00",
+        status=DocumentStatus.EM_REVISAO,
+        bucket_key="obras/OBRA-001-obra-teste/05_RDO/rascunhos/2026-06-27/REV00/draft.html",
+    )
+    session = MagicMock()
+    added: list[object] = []
+    calls = 0
+
+    async def fake_execute(_stmt: object) -> MagicMock:
+        nonlocal calls
+        calls += 1
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = doc if calls == 1 else obra
+        return result
+
+    def fake_add(obj: object) -> None:
+        added.append(obj)
+
+    session.execute = fake_execute
+    session.add.side_effect = fake_add
+    session.flush = AsyncMock()
+    session.commit = AsyncMock()
+    monkeypatch.setattr(
+        bucket_service,
+        "get_bytes",
+        lambda _key: b"<html><body><h1>RDO aprovado</h1></body></html>",
+    )
+    monkeypatch.setattr(
+        "src.services.pdf_service.html_to_pdf",
+        lambda _html: b"%PDF-1.4 aprovado",
+    )
+    monkeypatch.setattr(
+        rdo_service.bucket_service,
+        "put_bytes",
+        lambda key, _body, **_kwargs: f"s3://test-bucket/{key}",
+    )
+    monkeypatch.setattr(
+        rdo_service.bucket_service,
+        "persist_sidecar_metadata",
+        lambda _key, _metadata: "s3://test-bucket/meta.json",
+    )
+
+    with patch("src.services.rdo_service.audit_service.log_event", new_callable=AsyncMock):
+        result = await rdo_service.approve_and_finalize_rdo(
+            session,
+            documento_id=str(doc_id),
+            aprovador="engenheiro",
+            comentario="aprovado pelo Telegram",
+        )
+
+    approvals = [obj for obj in added if isinstance(obj, Aprovacao)]
+    assert len(approvals) == 1
+    assert approvals[0].aprovado is True
+    assert approvals[0].comentario == "aprovado pelo Telegram"
+    assert doc.status == DocumentStatus.FINALIZADO_VALIDADO
+    assert result["status"] == DocumentStatus.FINALIZADO_VALIDADO.value
+    assert result["aprovacao"]["aprovador"] == "engenheiro"
+    assert "finalizados_pdf" in (doc.bucket_key or "")
+    session.flush.assert_awaited_once()
+    session.commit.assert_awaited_once()

@@ -6,10 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_db
-from src.core.errors import ApprovalRequiredError, NotFoundError
+from src.core.errors import ApprovalRequiredError, NotFoundError, ValidationError
 from src.db.models import Documento
 from src.schemas.domain import (
     ApprovalRequest,
+    RdoApproveFinalizeRequest,
     RdoApproveRequest,
     RdoDraftRequest,
     RdoGenerateRequest,
@@ -74,6 +75,26 @@ async def rdo_finalizar(
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ApprovalRequiredError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/rdo/aprovar-finalizar")
+async def rdo_aprovar_finalizar(
+    body: RdoApproveFinalizeRequest,
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    try:
+        return await rdo_service.approve_and_finalize_rdo(
+            session,
+            documento_id=body.documento_id,
+            aprovador=body.aprovador,
+            comentario=body.comentario,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (ApprovalRequiredError, ValidationError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

@@ -248,6 +248,18 @@ Invoke-RestMethod `
 
 O backend agrega `EntradaBruta`, `Triagem`, `Arquivo`, `Foto` e `AudioTranscricao` por `obra_id + data_ref`, gera o conteúdo estruturado e chama o fluxo existente de rascunho. O documento gerado guarda `source_entrada_ids`, `source_arquivo_ids` e `campos_editaveis` em `metadata_json` para revisão humana antes de aprovação/finalização.
 
+Para aprovar e finalizar pelo fluxo conversacional do Telegram/OpenClaw, use o comando `/aprovar_rdo <documento_id>` somente depois de uma aprovação humana explícita. O OpenClaw deve chamar a API em uma única operação:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/rdo/aprovar-finalizar" `
+  -Headers $headers `
+  -Body '{"documento_id":"<documento_id>","aprovador":"Engenheiro Responsável","comentario":"Aprovado no Telegram"}'
+```
+
+Essa chamada cria o registro de aprovação, gera o PDF final, publica em `05_RDO/finalizados_pdf/` e retorna `status=FINALIZADO_VALIDADO`. Se a aprovação já tiver sido registrada por outro caminho, use `POST /api/v1/rdo/finalizar`.
+
 ## Estrutura de dados e bucket
 
 O pipeline mantém rastreabilidade explícita entre `EntradaBruta`, `Arquivo`, `Documento` e `Triagem` por `entrada_id`. A migration `008_operational_links` adiciona esses vínculos, além de `data_ref` e `metadata_json` em `entradas_brutas`. A migration `009_telegram_contextos` adiciona o mapeamento canônico de Telegram para obra.

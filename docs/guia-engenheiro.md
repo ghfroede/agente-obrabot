@@ -82,6 +82,26 @@ Exemplo:
 OBRA-001: estou enviando a nota de entrega do aço recebido hoje.
 ```
 
+## RDO pelo Telegram
+
+Depois que as entradas do dia forem enviadas e processadas, peça o rascunho do RDO:
+
+```text
+/gerar_rdo OBRA-001 hoje
+```
+
+O sistema deve responder com o `documento_id` do rascunho. Revise o documento antes de aprovar. Quando estiver correto, aprove de forma explícita:
+
+```text
+/aprovar_rdo <documento_id>
+```
+
+Esse comando registra a aprovação humana e finaliza o PDF no bucket. Para reprovar, informe o motivo:
+
+```text
+/reprovar_rdo <documento_id> faltou registrar a equipe de elétrica
+```
+
 ## O que evitar
 
 - Enviar informação de obra sem indicar a obra quando houver mais de uma obra ativa.

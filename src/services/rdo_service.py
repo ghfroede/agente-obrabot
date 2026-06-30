@@ -56,6 +56,11 @@ async def _get_documento(session: AsyncSession, documento_id: str | uuid.UUID) -
     return doc
 
 
+def _require_rdo_document(doc: Documento) -> None:
+    if doc.tipo != "rdo":
+        raise ValidationError("Documento não é um RDO")
+
+
 async def _require_approval(session: AsyncSession, doc: Documento) -> Aprovacao:
     if doc.status != DocumentStatus.APROVADO:
         raise ApprovalRequiredError(
@@ -288,16 +293,14 @@ async def update_rdo_draft_fields(
     }
 
 
-async def finalize_rdo(
+async def _finalize_approved_rdo(
     session: AsyncSession,
     *,
-    documento_id: str,
+    doc: Documento,
+    approval: Aprovacao,
     aprovador: str,
+    commit: bool,
 ) -> dict[str, Any]:
-    doc = await _get_documento(session, documento_id)
-
-    approval = await _require_approval(session, doc)
-
     obra = await _get_obra(session, doc.obra_id)
     data_ref = doc.data_ref.isoformat() if doc.data_ref else today_iso()
 
@@ -363,10 +366,80 @@ async def finalize_rdo(
         actor=aprovador,
         detalhes={"bucket_key": final_key, "formato": "pdf"},
     )
-    await session.commit()
+    if commit:
+        await session.commit()
     return {
         "documento_id": str(doc.id),
         "status": doc.status.value,
         "bucket_uri": uri,
         "formato": "pdf",
+    }
+
+
+async def finalize_rdo(
+    session: AsyncSession,
+    *,
+    documento_id: str,
+    aprovador: str,
+) -> dict[str, Any]:
+    doc = await _get_documento(session, documento_id)
+    _require_rdo_document(doc)
+
+    approval = await _require_approval(session, doc)
+    return await _finalize_approved_rdo(
+        session,
+        doc=doc,
+        approval=approval,
+        aprovador=aprovador,
+        commit=True,
+    )
+
+
+async def approve_and_finalize_rdo(
+    session: AsyncSession,
+    *,
+    documento_id: str,
+    aprovador: str,
+    comentario: str | None = None,
+) -> dict[str, Any]:
+    doc = await _get_documento(session, documento_id)
+    _require_rdo_document(doc)
+    if doc.status == DocumentStatus.FINALIZADO_VALIDADO:
+        raise ValidationError("RDO já finalizado")
+
+    approval = Aprovacao(
+        documento_id=doc.id,
+        aprovador=aprovador,
+        aprovado=True,
+        comentario=comentario,
+    )
+    session.add(approval)
+    doc.status = DocumentStatus.APROVADO
+    doc.updated_at = utc_now()
+    await audit_service.log_event(
+        session,
+        entidade="documento",
+        entidade_id=str(doc.id),
+        acao="aprovado",
+        obra_id=doc.obra_id,
+        actor=aprovador,
+        detalhes={"comentario": comentario, "origem": "rdo_aprovar_finalizar"},
+    )
+    await session.flush()
+
+    final = await _finalize_approved_rdo(
+        session,
+        doc=doc,
+        approval=approval,
+        aprovador=aprovador,
+        commit=False,
+    )
+    await session.commit()
+    return {
+        **final,
+        "aprovacao": {
+            "aprovado": True,
+            "aprovador": aprovador,
+            "comentario": comentario,
+        },
     }

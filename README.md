@@ -45,6 +45,7 @@ make dev-worker
 | GET/POST | `/api/v1/telegram-contextos` | Mapeia chat/tópico Telegram para obra |
 | POST | `/api/v1/entradas/:id/resolver-obra` | Resolve entrada Telegram pendente de obra |
 | POST | `/api/v1/rdo/gerar` | Gera rascunho de RDO a partir das evidências do dia |
+| POST | `/api/v1/rdo/aprovar-finalizar` | Aprova RDO com validação humana explícita e publica PDF final |
 | GET | `/admin` | Painel admin interno (login em `/admin/login`, auth por sessão) |
 | GET | `/admin/dia-obra` | Consolida evidências por obra/data e gera rascunho de RDO pelo painel |
 
@@ -103,7 +104,7 @@ Cliente HTTP / Telegram (OpenClaw) → API (público) → EntradaBruta → Redis
 
 Ingestão unificada: todo canal grava uma `EntradaBruta` e responde rápido (`202`); o worker faz storage + triagem fora do request. Detalhes em [AGENTS.md](AGENTS.md) e `dev/plan-2.md`.
 
-Entradas Telegram sem obra clara ficam com `status=pending_obra` e não geram documento oficial até que uma obra cadastrada seja confirmada. Depois do processamento, o painel `/admin/dia-obra` permite revisar o dia operacional da obra e gerar o rascunho do RDO a partir das evidências persistidas; o detalhe do documento permite complementar clima, equipe, equipamentos e observações antes da aprovação humana e finalizar o PDF validado no bucket.
+Entradas Telegram sem obra clara ficam com `status=pending_obra` e não geram documento oficial até que uma obra cadastrada seja confirmada. Depois do processamento, o painel `/admin/dia-obra` permite revisar o dia operacional da obra e gerar o rascunho do RDO a partir das evidências persistidas; o detalhe do documento permite complementar clima, equipe, equipamentos e observações antes da aprovação humana e finalizar o PDF validado no bucket. Para operação conversacional, o OpenClaw pode usar `/aprovar_rdo <documento_id>` chamando `/api/v1/rdo/aprovar-finalizar`, que registra a aprovação explícita e publica o PDF final em uma única chamada.
 
 Documentação detalhada: `docs/railway-deploy-plan.md`, `docs/operations.md`, `docs/storage-taxonomy.md`, `docs/guia-engenheiro.md` e [`AGENTS.md`](AGENTS.md) (instruções para agentes de IA).
 

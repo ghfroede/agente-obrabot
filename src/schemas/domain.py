@@ -87,6 +87,12 @@ class RdoApproveRequest(BaseModel):
     comentario: str | None = None
 
 
+class RdoApproveFinalizeRequest(BaseModel):
+    documento_id: str
+    aprovador: str = "engenheiro"
+    comentario: str | None = None
+
+
 class FotoRelatorioRequest(BaseModel):
     obra_id: str
     periodo_inicio: str
