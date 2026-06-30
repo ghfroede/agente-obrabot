@@ -1,7 +1,23 @@
 {% extends "admin/base.html" %}
 {% block title %}Dashboard — Painel Obrabot{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
+<section class="hero">
+  <span class="eyebrow">Painel operacional</span>
+  <h1>Tudo da obra, em um só lugar.</h1>
+  <p>Acompanhe entradas, triagens e documentos em tempo real. Resolva pendências e gere o RDO do dia sem sair do painel.</p>
+  <div class="hero-actions">
+    <a class="btn btn-light" href="/admin/dia-obra">▶ Abrir Dia da Obra</a>
+    <a class="btn btn-outline" href="/admin/entradas?status=pending_obra">Ver pendências</a>
+  </div>
+</section>
+
+<div class="banner">
+  <div>
+    <h2>Documentos aguardando você</h2>
+    <p>{{ counts.aguardando_aprovacao }} documento(s) prontos para aprovação e publicação.</p>
+  </div>
+  <a class="btn btn-light" href="/admin/documentos">Revisar agora</a>
+</div>
 
 <div class="card">
   <h2>Pendências</h2>
