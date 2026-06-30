@@ -5,8 +5,8 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "009_add_telegram_contextos"
-down_revision: str | None = "008_link_entries_and_operational_metadata"
+revision: str = "009_telegram_contextos"
+down_revision: str | None = "008_operational_links"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

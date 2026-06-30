@@ -239,7 +239,7 @@ O backend agrega `EntradaBruta`, `Triagem`, `Arquivo`, `Foto` e `AudioTranscrica
 
 ## Estrutura de dados e bucket
 
-O pipeline mantém rastreabilidade explícita entre `EntradaBruta`, `Arquivo`, `Documento` e `Triagem` por `entrada_id`. A migration `008_link_entries_and_operational_metadata` adiciona esses vínculos, além de `data_ref` e `metadata_json` em `entradas_brutas`. A migration `009_add_telegram_contextos` adiciona o mapeamento canônico de Telegram para obra.
+O pipeline mantém rastreabilidade explícita entre `EntradaBruta`, `Arquivo`, `Documento` e `Triagem` por `entrada_id`. A migration `008_operational_links` adiciona esses vínculos, além de `data_ref` e `metadata_json` em `entradas_brutas`. A migration `009_telegram_contextos` adiciona o mapeamento canônico de Telegram para obra.
 
 Após deploy do backend que contém essa migration, aplique:
 

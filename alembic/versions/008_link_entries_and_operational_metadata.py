@@ -5,7 +5,7 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "008_link_entries_and_operational_metadata"
+revision: str = "008_operational_links"
 down_revision: str | None = "007_allow_pending_obra_ingestion"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
