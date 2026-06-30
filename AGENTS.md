@@ -45,6 +45,7 @@ POST /api/v1/openclaw  ┘→ API (FastAPI) → cria EntradaBruta → Redis (fil
 | `src/api/routes/tasks.py` | `/tasks` — cria Task + EntradaBruta, enfileira |
 | `src/api/routes/openclaw.py` | Webhook OpenClaw/Telegram (HMAC, 202) |
 | `src/api/routes/health.py` | Healthcheck `/health` |
+| `src/api/routes/admin.py` | Painel admin `/admin` (server-rendered, auth por sessão) |
 | `src/services/entrada_service.py` | **Núcleo de ingestão unificada** (entrada + fila + pipeline) |
 | `src/services/ingestao_service.py` | `ensure_obra`, `save_triagem`, idempotência atômica |
 | `src/worker/index.py` | Worker RQ: `process_entrada` (atual) + `process_task` (legado) |
@@ -86,6 +87,7 @@ docker compose up -d       # Postgres + Redis local
 4. Triagem retorna JSON estruturado (`tipo_documento`, `obra_id`, `pendencias`, etc.).
 5. PDF final e publicação em pasta final exigem validação humana (fases futuras).
 6. Fonte de verdade: bucket + PostgreSQL — não a resposta da IA.
+7. Nenhuma rota `/admin/*` responde sem sessão válida — o guard `require_admin_session` interrompe via `raise AdminLoginRequired` (Depends que retorna `Response` não interrompe a rota).
 
 ## Deploy Railway
 

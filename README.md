@@ -43,6 +43,7 @@ make dev-worker
 | POST | `/api/v1/openclaw/telegram-event` | Ingestão Telegram via OpenClaw (HMAC + idempotência) |
 | GET/POST | `/api/v1/obras` | Lista/cadastra obras reais |
 | POST | `/api/v1/entradas/:id/resolver-obra` | Resolve entrada Telegram pendente de obra |
+| GET | `/admin` | Painel admin interno (login em `/admin/login`, auth por sessão) |
 
 ### Exemplo
 
@@ -78,6 +79,7 @@ Veja `.env.example`. Obrigatórias em produção:
 - `OBRABOT_API_KEY` — exigida no header `X-Obrabot-API-Key` para rotas HTTP públicas, exceto `/health` e OpenClaw
 - `OPENCLAW_SHARED_SECRET` + `OPENCLAW_REQUIRE_HMAC=true` — assinatura HMAC do webhook OpenClaw
 - `OPENAI_API_KEY` — para triagem via LLM (sem chave, usa heurística)
+- `ADMIN_PASSWORD` + `SESSION_SECRET` — exigidas pelo serviço `api` para o painel `/admin` (ausência derruba a `api` em produção — fail-closed)
 
 Em produção, `/docs`, `/redoc` e `/openapi.json` ficam desabilitados.
 

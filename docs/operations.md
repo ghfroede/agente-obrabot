@@ -126,6 +126,26 @@ Referencie `DATABASE_URL` e `REDIS_URL` das variáveis dos serviços Postgres/Re
 
 Com `APP_ENV=production` ou `NODE_ENV=production`, a API não publica `/docs`, `/redoc` nem `/openapi.json`.
 
+## Painel admin interno
+
+Painel server-rendered no serviço `api`, em `/admin` (login em `/admin/login`). Prod: `https://api-production-8bfb.up.railway.app/admin`.
+
+Variáveis **obrigatórias** no serviço `api` (ausência derruba a `api` — fail-closed):
+
+- `ADMIN_PASSWORD` — senha de login (comparada com `hmac.compare_digest`)
+- `SESSION_SECRET` — chave do cookie de sessão assinado
+
+```bash
+railway variables --service api --set "ADMIN_PASSWORD=..."
+railway variables --service api --set "SESSION_SECRET=..."
+```
+
+Login tem rate-limit por IP (`ADMIN_LOGIN_MAX_PER_MINUTE`, padrão `5`). Para rotacionar a senha, basta atualizar a variável e redeployar:
+
+```bash
+railway variables --service api --set "ADMIN_PASSWORD=..."
+```
+
 ## Cadastrar obras iniciais
 
 Antes de usar o Telegram em operação real, cadastre pelo menos uma obra. As rotas de obras são administrativas e exigem `X-Obrabot-API-Key`; portanto, `OBRABOT_API_KEY` precisa estar definida no serviço `api`.
