@@ -13,7 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import get_db
 from src.config.env import get_settings
 from src.core.constants import DocumentStatus
-from src.core.errors import AdminLoginRequired, NotFoundError, RateLimitError
+from src.core.errors import (
+    AdminLoginRequired,
+    NotFoundError,
+    RateLimitError,
+    ValidationError,
+)
 from src.db.models import Obra
 from src.schemas.obras import ObraCreate
 from src.services import (
@@ -22,7 +27,10 @@ from src.services import (
     entrada_service,
     obra_service,
     rate_limit_service,
+    rdo_aggregator_service,
+    rdo_service,
 )
+from src.utils.dates import today_iso
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -77,6 +85,31 @@ def _check_same_origin(request: Request) -> None:
     if source is None or not source.startswith(base):
         raise HTTPException(status_code=403, detail="Origem não autorizada")
 
+
+def _as_textarea_lines(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return "\n".join(str(item).strip() for item in value if str(item).strip())
+    return str(value)
+
+
+def _rdo_campos_form(documento: object) -> dict[str, str]:
+    metadata_raw = getattr(documento, "metadata_json", None)
+    metadata = metadata_raw if isinstance(metadata_raw, dict) else {}
+    conteudo_raw = metadata.get("conteudo")
+    conteudo = conteudo_raw if isinstance(conteudo_raw, dict) else {}
+    fields_raw = metadata.get("campos_editaveis") or conteudo.get("campos_editaveis")
+    fields = fields_raw if isinstance(fields_raw, dict) else {}
+    return {
+        "clima": _as_textarea_lines(fields.get("clima")),
+        "equipe": _as_textarea_lines(fields.get("equipe")),
+        "equipamentos": _as_textarea_lines(fields.get("equipamentos")),
+        "observacoes": _as_textarea_lines(fields.get("observacoes")),
+        "complementos_engenheiro": _as_textarea_lines(
+            fields.get("complementos_engenheiro")
+        ),
+    }
 
 # ---------------------------------------------------------------------------
 # Login / logout (sem guard de sessão)
@@ -238,6 +271,80 @@ async def obra_toggle_status(
 
 
 # ---------------------------------------------------------------------------
+# Dia da Obra / RDO
+# ---------------------------------------------------------------------------
+
+
+@router.get("/dia-obra", dependencies=[Depends(require_admin_session)])
+async def dia_obra(
+    request: Request,
+    obra_id: str | None = Query(default=None),
+    data_ref: str | None = Query(default=None),
+    session: AsyncSession = Depends(get_db),
+) -> Any:
+    obras = await obra_service.list_obras(session)
+    selected_data_ref = data_ref or today_iso()
+    selected_obra_id = obra_id or ""
+    conteudo: dict[str, Any] | None = None
+    erro: str | None = None
+
+    if selected_obra_id:
+        try:
+            conteudo = await rdo_aggregator_service.aggregate_daily_rdo(
+                session, obra_id=selected_obra_id, data_ref=selected_data_ref
+            )
+        except (NotFoundError, ValidationError, ValueError) as exc:
+            erro = str(exc)
+
+    return templates.TemplateResponse(
+        request,
+        "admin/dia_obra.html",
+        {
+            "obras": obras,
+            "obra_id": selected_obra_id,
+            "data_ref": selected_data_ref,
+            "conteudo": conteudo,
+            "erro": erro,
+        },
+    )
+
+
+@router.post("/dia-obra/gerar-rdo", dependencies=[Depends(require_admin_session)])
+async def dia_obra_gerar_rdo(
+    request: Request,
+    obra_id: str = Form(...),
+    data_ref: str = Form(...),
+    session: AsyncSession = Depends(get_db),
+) -> Any:
+    _check_same_origin(request)
+    obras = await obra_service.list_obras(session)
+    try:
+        conteudo = await rdo_aggregator_service.aggregate_daily_rdo(
+            session, obra_id=obra_id, data_ref=data_ref
+        )
+        result = await rdo_service.create_rdo_draft(
+            session, obra_id=obra_id, data_ref=data_ref, conteudo=conteudo
+        )
+    except (NotFoundError, ValidationError, ValueError) as exc:
+        return templates.TemplateResponse(
+            request,
+            "admin/dia_obra.html",
+            {
+                "obras": obras,
+                "obra_id": obra_id,
+                "data_ref": data_ref,
+                "conteudo": None,
+                "erro": str(exc),
+            },
+            status_code=200,
+        )
+
+    return RedirectResponse(
+        f"/admin/documentos/{result['documento_id']}", status_code=303
+    )
+
+
+# ---------------------------------------------------------------------------
 # Entradas
 # ---------------------------------------------------------------------------
 
@@ -365,12 +472,16 @@ async def documentos_list(
 
 @router.get("/documentos/{documento_id}", dependencies=[Depends(require_admin_session)])
 async def documento_detail(
-    documento_id: uuid.UUID, request: Request, session: AsyncSession = Depends(get_db)
+    documento_id: uuid.UUID,
+    request: Request,
+    rdo_campos: str | None = Query(default=None),
+    session: AsyncSession = Depends(get_db),
 ) -> Any:
     found = await admin_service.get_documento_com_triagem(session, documento_id)
     if found is None:
         raise HTTPException(status_code=404, detail="Documento não encontrado")
     doc, triagem = found
+    is_rdo = doc.tipo == "rdo"
     return templates.TemplateResponse(
         request,
         "admin/documento_detail.html",
@@ -378,7 +489,48 @@ async def documento_detail(
             "documento": doc,
             "triagem": triagem,
             "aguardando_aprovacao": doc.status in admin_service.AGUARDANDO_APROVACAO,
+            "rdo_editable": is_rdo and doc.status in rdo_service.RDO_EDITABLE_STATUSES,
+            "rdo_campos": _rdo_campos_form(doc) if is_rdo else {},
+            "rdo_campos_sucesso": rdo_campos == "ok",
         },
+    )
+
+
+@router.post(
+    "/documentos/{documento_id}/rdo-campos",
+    dependencies=[Depends(require_admin_session)],
+)
+async def documento_rdo_campos_submit(
+    documento_id: uuid.UUID,
+    request: Request,
+    editor: str = Form("engenheiro"),
+    clima: str | None = Form(default=None),
+    equipe: str | None = Form(default=None),
+    equipamentos: str | None = Form(default=None),
+    observacoes: str | None = Form(default=None),
+    complementos_engenheiro: str | None = Form(default=None),
+    session: AsyncSession = Depends(get_db),
+) -> Any:
+    _check_same_origin(request)
+    try:
+        await rdo_service.update_rdo_draft_fields(
+            session,
+            documento_id=str(documento_id),
+            campos={
+                "clima": clima,
+                "equipe": equipe,
+                "equipamentos": equipamentos,
+                "observacoes": observacoes,
+                "complementos_engenheiro": complementos_engenheiro,
+            },
+            editor=editor,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RedirectResponse(
+        f"/admin/documentos/{documento_id}?rdo_campos=ok", status_code=303
     )
 
 

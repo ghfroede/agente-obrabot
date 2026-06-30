@@ -109,6 +109,91 @@ async def test_rdo_gerar_uses_aggregator_and_creates_draft(
 
 
 @pytest.mark.asyncio
+async def test_update_rdo_draft_fields_regenerates_html_and_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    doc_id = uuid.uuid4()
+    obra = Obra(id="OBRA-001", nome="Obra Um", slug="obra-um")
+    doc = Documento(
+        id=doc_id,
+        obra_id="OBRA-001",
+        tipo="rdo",
+        titulo="RDO",
+        data_ref=date(2026, 6, 27),
+        revisao="REV00",
+        status=DocumentStatus.RASCUNHO_GERADO,
+        bucket_key="obras/OBRA-001-obra-um/05_RDO/rascunhos/2026-06-27/REV00/draft.html",
+        metadata_json={
+            "conteudo": {
+                "source_entrada_ids": ["entrada-1"],
+                "source_arquivo_ids": ["arquivo-1"],
+                "resumo_operacional": {},
+                "servicos": [],
+                "pendencias": [],
+                "fotos": [],
+                "audios": [],
+                "documentos_brutos": [],
+                "campos_editaveis": {},
+            },
+            "source_entrada_ids": ["entrada-1"],
+            "source_arquivo_ids": ["arquivo-1"],
+        },
+    )
+    session = AsyncMock()
+    calls = 0
+
+    async def fake_execute(_stmt: object) -> MagicMock:
+        nonlocal calls
+        calls += 1
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = doc if calls == 1 else obra
+        return result
+
+    captured: dict[str, object] = {}
+
+    def fake_put_bytes(key: str, body: bytes, **kwargs: object) -> str:
+        captured["key"] = key
+        captured["body"] = body
+        captured["kwargs"] = kwargs
+        return f"s3://test-bucket/{key}"
+
+    session.execute = fake_execute
+    session.commit = AsyncMock()
+    monkeypatch.setattr(rdo_service.bucket_service, "put_bytes", fake_put_bytes)
+    monkeypatch.setattr(
+        rdo_service.bucket_service,
+        "persist_sidecar_metadata",
+        lambda _key, _metadata: "s3://test-bucket/meta.json",
+    )
+
+    with patch("src.services.rdo_service.audit_service.log_event", new_callable=AsyncMock):
+        result = await rdo_service.update_rdo_draft_fields(
+            session,
+            documento_id=str(doc_id),
+            editor="engenheiro",
+            campos={
+                "clima": " Sol ",
+                "equipe": "Mestre João\n\n2 pedreiros",
+                "equipamentos": "Betoneira",
+                "observacoes": "Sem interferências.",
+                "complementos_engenheiro": "Liberar frente amanhã.",
+            },
+        )
+
+    assert result["status"] == DocumentStatus.EM_REVISAO.value
+    assert doc.status == DocumentStatus.EM_REVISAO
+    assert doc.metadata_json is not None
+    assert doc.metadata_json["campos_editaveis"]["clima"] == "Sol"
+    assert doc.metadata_json["campos_editaveis"]["equipe"] == [
+        "Mestre João",
+        "2 pedreiros",
+    ]
+    assert b"Sol" in captured["body"]
+    assert captured["kwargs"] == {"content_type": "text/html", "allow_overwrite": True}
+    session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_finalize_blocked_when_not_approved() -> None:
     doc_id = uuid.uuid4()
     doc = Documento(

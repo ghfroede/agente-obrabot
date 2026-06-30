@@ -139,11 +139,27 @@
     }
     form.inline { display: inline; margin: 0; }
     label { display: block; margin: .6rem 0 .25rem; font-weight: 600; color: var(--brand); }
-    input[type=text], input[type=password], select, textarea {
+    input[type=text], input[type=password], input[type=date], select, textarea {
       font: inherit; padding: .55rem .7rem; width: 100%; max-width: 420px; box-sizing: border-box;
       border-radius: 12px; border: 1px solid rgba(20,35,59,.18); background: rgba(255,255,255,.6);
       -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
       transition: border-color .2s var(--ease), box-shadow .2s var(--ease), background .2s var(--ease);
+    }
+    .filter-form {
+      display: grid; grid-template-columns: minmax(220px, 1fr) 180px auto; gap: .8rem; align-items: end;
+    }
+    .actions-row { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
+    .meta-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem;
+    }
+    .metric { padding: .75rem; border-radius: 12px; background: rgba(255,255,255,.34); }
+    .metric strong { display: block; color: var(--brand); font-size: 1.4rem; line-height: 1.2; }
+    .muted { opacity: .72; }
+    .text-cell { max-width: 420px; overflow-wrap: anywhere; }
+    .wide-field { max-width: 100% !important; }
+    code {
+      padding: .1rem .35rem; border-radius: 6px; background: rgba(16,24,39,.08);
+      overflow-wrap: anywhere;
     }
     input:focus, select:focus, textarea:focus {
       outline: none; border-color: #5690ff; background: rgba(255,255,255,.82);
@@ -164,9 +180,15 @@
       th { background: rgba(255,255,255,.06); }
       tbody tr:hover { background: rgba(255,255,255,.06); }
       .badge { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.18); color: #e9eef7; }
-      input[type=text], input[type=password], select, textarea {
+      input[type=text], input[type=password], input[type=date], select, textarea {
         background: rgba(20,28,46,.6); color: #e9eef7; border-color: rgba(255,255,255,.16);
       }
+      .metric { background: rgba(255,255,255,.06); }
+      code { background: rgba(255,255,255,.08); }
+    }
+    @media (max-width: 760px) {
+      nav { flex-wrap: wrap; gap: .75rem; }
+      .filter-form { grid-template-columns: 1fr; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before { animation: none !important; transition: none !important; }
@@ -178,6 +200,7 @@
   <nav>
     <a href="/admin">Dashboard</a>
     <a href="/admin/obras">Obras</a>
+    <a href="/admin/dia-obra">Dia da Obra</a>
     <a href="/admin/entradas">Entradas</a>
     <a href="/admin/documentos">Documentos</a>
     <span class="spacer"></span>

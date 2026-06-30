@@ -1,0 +1,213 @@
+{% extends "admin/base.html" %}
+{% block title %}Dia da Obra — Painel Obrabot{% endblock %}
+{% block content %}
+<h1>Dia da Obra</h1>
+
+<div class="card">
+  <form class="filter-form" method="get" action="/admin/dia-obra">
+    <div>
+      <label for="obra_id">Obra</label>
+      <select id="obra_id" name="obra_id" required>
+        <option value="">Selecione</option>
+        {% for obra in obras %}
+          <option value="{{ obra.id }}" {% if obra.id == obra_id %}selected{% endif %}>
+            {{ obra.id }} — {{ obra.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="data_ref">Data</label>
+      <input type="date" id="data_ref" name="data_ref" value="{{ data_ref }}" required />
+    </div>
+    <div>
+      <button type="submit">Consultar</button>
+    </div>
+  </form>
+</div>
+
+{% if erro %}
+  <div class="card">
+    <p class="erro">{{ erro }}</p>
+  </div>
+{% endif %}
+
+{% if conteudo %}
+  <div class="card">
+    <div class="actions-row">
+      <h2 style="margin: 0;">{{ conteudo.obra.nome }}</h2>
+      <span class="badge">{{ conteudo.obra.id }}</span>
+      <span class="badge">{{ conteudo.data_ref }}</span>
+      <form class="inline" method="post" action="/admin/dia-obra/gerar-rdo">
+        <input type="hidden" name="obra_id" value="{{ obra_id }}" />
+        <input type="hidden" name="data_ref" value="{{ data_ref }}" />
+        <button type="submit">Gerar RDO</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Resumo</h2>
+    <div class="meta-grid">
+      <div class="metric">
+        <strong>{{ conteudo.resumo_operacional.entradas_count }}</strong>
+        entradas
+      </div>
+      <div class="metric">
+        <strong>{{ conteudo.resumo_operacional.triagens_count }}</strong>
+        triagens
+      </div>
+      <div class="metric">
+        <strong>{{ conteudo.resumo_operacional.fotos_count }}</strong>
+        fotos
+      </div>
+      <div class="metric">
+        <strong>{{ conteudo.resumo_operacional.audios_count }}</strong>
+        áudios
+      </div>
+      <div class="metric">
+        <strong>{{ conteudo.resumo_operacional.arquivos_count }}</strong>
+        arquivos
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Entradas e Triagens</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Hora</th>
+          <th>Fonte</th>
+          <th>Autor</th>
+          <th>Status</th>
+          <th>Conteúdo</th>
+          <th>Triagem</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for item in conteudo.servicos %}
+        <tr>
+          <td>{{ item.created_at or "—" }}</td>
+          <td>{{ item.source }}</td>
+          <td>{{ item.author or "—" }}</td>
+          <td><span class="badge">{{ item.status }}</span></td>
+          <td class="text-cell">{{ item.text or "—" }}</td>
+          <td class="text-cell">
+            {% for triagem in item.triagens %}
+              <p>
+                <strong>{{ triagem.tipo_documento }}</strong>
+                {% if triagem.confianca is not none %}
+                  <span class="muted">({{ "%.2f"|format(triagem.confianca) }})</span>
+                {% endif %}
+              </p>
+              <p>{{ triagem.resumo or "Sem resumo." }}</p>
+              {% if triagem.acao_sugerida %}
+                <p class="muted">{{ triagem.acao_sugerida }}</p>
+              {% endif %}
+            {% else %}
+              <span class="muted">Sem triagem.</span>
+            {% endfor %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6">Nenhuma entrada para a data.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Pendências</h2>
+    {% if conteudo.pendencias %}
+      <table>
+        <thead><tr><th>Descrição</th></tr></thead>
+        <tbody>
+        {% for pendencia in conteudo.pendencias %}
+          <tr><td class="text-cell">{{ pendencia }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Sem pendências extraídas.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Fotos</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Hora</th>
+          <th>Descrição</th>
+          <th>Arquivo</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for foto in conteudo.fotos %}
+        <tr>
+          <td>{{ foto.created_at or foto.data_foto or "—" }}</td>
+          <td class="text-cell">{{ foto.descricao or "Sem descrição." }}</td>
+          <td class="text-cell"><code>{{ foto.bucket_uri }}</code></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3">Nenhuma foto registrada.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Áudios e Documentos</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Tipo</th>
+          <th>Hora</th>
+          <th>Conteúdo</th>
+          <th>Arquivo</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for audio in conteudo.audios %}
+        <tr>
+          <td>Áudio</td>
+          <td>{{ audio.created_at or "—" }}</td>
+          <td class="text-cell">{{ audio.transcricao or "Sem transcrição." }}</td>
+          <td class="text-cell"><code>{{ audio.bucket_uri }}</code></td>
+        </tr>
+      {% endfor %}
+      {% for documento in conteudo.documentos_brutos %}
+        <tr>
+          <td>Documento</td>
+          <td>{{ documento.created_at or "—" }}</td>
+          <td class="text-cell">{{ documento.nome_original or documento.mime_type or "Arquivo bruto" }}</td>
+          <td class="text-cell"><code>{{ documento.bucket_uri }}</code></td>
+        </tr>
+      {% endfor %}
+      {% if not conteudo.audios and not conteudo.documentos_brutos %}
+        <tr><td colspan="4">Nenhum áudio ou documento bruto registrado.</td></tr>
+      {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Rastreabilidade</h2>
+    <p><strong>Entradas:</strong>
+      {% for entrada_id in conteudo.source_entrada_ids %}
+        <code>{{ entrada_id }}</code>
+      {% else %}
+        <span class="muted">nenhuma</span>
+      {% endfor %}
+    </p>
+    <p><strong>Arquivos:</strong>
+      {% for arquivo_id in conteudo.source_arquivo_ids %}
+        <code>{{ arquivo_id }}</code>
+      {% else %}
+        <span class="muted">nenhum</span>
+      {% endfor %}
+    </p>
+  </div>
+{% endif %}
+{% endblock %}

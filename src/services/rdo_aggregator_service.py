@@ -150,7 +150,9 @@ def _entrada_summary(entrada: EntradaBruta, triagens: list[Triagem]) -> dict[str
     return {
         "entrada_id": str(entrada.id),
         "source": entrada.source,
+        "status": entrada.status,
         "author": entrada.author,
+        "created_at": entrada.created_at.isoformat() if entrada.created_at else None,
         "text": entrada.text,
         "storage_uri": entrada.storage_uri,
         "triagens": [_triagem_summary(triagem) for triagem in triagens],
@@ -164,6 +166,7 @@ def _triagem_summary(triagem: Triagem) -> dict[str, Any]:
         "tipo_documento": triagem.tipo_documento,
         "confianca": triagem.confianca,
         "resumo": triagem.resumo,
+        "created_at": triagem.created_at.isoformat() if triagem.created_at else None,
         "campos_extraidos": triagem.campos_extraidos or {},
         "acao_sugerida": triagem.acao_sugerida,
         "precisa_aprovacao": triagem.precisa_aprovacao,
@@ -188,6 +191,7 @@ def _foto_summary(foto: Foto, arquivo: Arquivo) -> dict[str, Any]:
         "arquivo_id": str(arquivo.id),
         "entrada_id": str(arquivo.entrada_id) if arquivo.entrada_id else None,
         "data_foto": foto.data_foto.isoformat() if foto.data_foto else None,
+        "created_at": foto.created_at.isoformat() if foto.created_at else None,
         "descricao": foto.descricao,
         "bucket_uri": arquivo.bucket_uri,
     }
@@ -198,6 +202,7 @@ def _audio_summary(audio: AudioTranscricao, arquivo: Arquivo) -> dict[str, Any]:
         "audio_id": str(audio.id),
         "arquivo_id": str(arquivo.id),
         "entrada_id": str(arquivo.entrada_id) if arquivo.entrada_id else None,
+        "created_at": audio.created_at.isoformat() if audio.created_at else None,
         "transcricao": audio.transcricao,
         "bucket_uri": arquivo.bucket_uri,
     }
@@ -210,6 +215,7 @@ def _arquivo_summary(arquivo: Arquivo) -> dict[str, Any]:
         "tipo": arquivo.tipo,
         "nome_original": arquivo.nome_original,
         "mime_type": arquivo.mime_type,
+        "created_at": arquivo.created_at.isoformat() if arquivo.created_at else None,
         "bucket_uri": arquivo.bucket_uri,
         "hash_sha256": arquivo.hash_sha256,
     }

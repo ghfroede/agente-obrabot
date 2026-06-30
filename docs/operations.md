@@ -225,6 +225,17 @@ Essa chamada vincula a entrada à obra e enfileira o processamento assíncrono.
 
 ## Gerar RDO do dia
 
+Pelo painel admin:
+
+1. Acesse `/admin/dia-obra`.
+2. Selecione obra e data.
+3. Revise entradas, triagens, fotos, áudios, documentos brutos e pendências do dia.
+4. Clique em **Gerar RDO** para criar o rascunho e abrir o detalhe do documento.
+
+O rascunho segue o fluxo normal de validação humana em `/admin/documentos/<documento_id>`. No detalhe do documento, use **Complementos do RDO** para preencher clima, equipe, equipamentos, observações e complementos do engenheiro; ao salvar, o backend atualiza `metadata_json`, regenera o HTML do rascunho e mantém o status em revisão antes da aprovação.
+
+Pela API:
+
 Depois que as entradas do dia estiverem processadas, gere um rascunho de RDO a partir das evidências persistidas:
 
 ```powershell

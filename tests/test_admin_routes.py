@@ -134,6 +134,197 @@ async def test_resolver_obra_translates_errors(monkeypatch: pytest.MonkeyPatch) 
         assert esperado in resp.text
 
 
+async def test_dia_obra_renders_aggregated_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _build_app(monkeypatch)
+    obra = SimpleNamespace(id="OBRA-1", nome="Obra Um", status="ativa")
+    conteudo = {
+        "obra": {"id": "OBRA-1", "nome": "Obra Um"},
+        "data_ref": "2026-06-29",
+        "source_entrada_ids": [str(uuid.uuid4())],
+        "source_arquivo_ids": [str(uuid.uuid4())],
+        "resumo_operacional": {
+            "entradas_count": 1,
+            "triagens_count": 1,
+            "fotos_count": 1,
+            "audios_count": 0,
+            "arquivos_count": 1,
+        },
+        "servicos": [
+            {
+                "entrada_id": str(uuid.uuid4()),
+                "source": "openclaw",
+                "status": "completed",
+                "author": "Engenharia",
+                "created_at": "2026-06-29T10:00:00+00:00",
+                "text": "Equipe elétrica executou infraestrutura.",
+                "storage_uri": "s3://bucket/raw.json",
+                "triagens": [
+                    {
+                        "triagem_id": str(uuid.uuid4()),
+                        "documento_id": None,
+                        "tipo_documento": "rdo_evento",
+                        "confianca": 0.92,
+                        "resumo": "Infraestrutura elétrica em execução.",
+                        "created_at": "2026-06-29T10:01:00+00:00",
+                        "campos_extraidos": {},
+                        "acao_sugerida": None,
+                        "precisa_aprovacao": True,
+                    }
+                ],
+            }
+        ],
+        "pendencias": ["Confirmar equipe terceirizada."],
+        "fotos": [
+            {
+                "foto_id": str(uuid.uuid4()),
+                "arquivo_id": str(uuid.uuid4()),
+                "entrada_id": str(uuid.uuid4()),
+                "data_foto": "2026-06-29",
+                "created_at": "2026-06-29T10:02:00+00:00",
+                "descricao": "Painel instalado.",
+                "bucket_uri": "s3://bucket/foto.jpg",
+            }
+        ],
+        "audios": [],
+        "documentos_brutos": [],
+    }
+    monkeypatch.setattr(
+        admin_route.obra_service, "list_obras", AsyncMock(return_value=[obra])
+    )
+    aggregate = AsyncMock(return_value=conteudo)
+    monkeypatch.setattr(
+        admin_route.rdo_aggregator_service, "aggregate_daily_rdo", aggregate
+    )
+
+    async with _client(app) as client:
+        await _login(client)
+        resp = await client.get(
+            "/admin/dia-obra?obra_id=OBRA-1&data_ref=2026-06-29"
+        )
+
+    assert resp.status_code == 200
+    aggregate.assert_awaited_once()
+    assert "Equipe elétrica executou infraestrutura." in resp.text
+    assert "Confirmar equipe terceirizada." in resp.text
+
+
+async def test_dia_obra_gerar_rdo_redirects_to_document(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _build_app(monkeypatch)
+    obra = SimpleNamespace(id="OBRA-1", nome="Obra Um", status="ativa")
+    conteudo = {
+        "obra": {"id": "OBRA-1", "nome": "Obra Um"},
+        "data_ref": "2026-06-29",
+        "source_entrada_ids": [],
+        "source_arquivo_ids": [],
+    }
+    documento_id = uuid.uuid4()
+    monkeypatch.setattr(
+        admin_route.obra_service, "list_obras", AsyncMock(return_value=[obra])
+    )
+    aggregate = AsyncMock(return_value=conteudo)
+    create_draft = AsyncMock(
+        return_value={
+            "documento_id": str(documento_id),
+            "status": "RASCUNHO_GERADO",
+            "revisao": "R0",
+            "bucket_uri": "s3://bucket/rdo.html",
+        }
+    )
+    monkeypatch.setattr(
+        admin_route.rdo_aggregator_service, "aggregate_daily_rdo", aggregate
+    )
+    monkeypatch.setattr(admin_route.rdo_service, "create_rdo_draft", create_draft)
+
+    async with _client(app) as client:
+        await _login(client)
+        resp = await client.post(
+            "/admin/dia-obra/gerar-rdo",
+            data={"obra_id": "OBRA-1", "data_ref": "2026-06-29"},
+            follow_redirects=False,
+        )
+
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/admin/documentos/{documento_id}"
+    aggregate.assert_awaited_once()
+    create_draft.assert_awaited_once()
+
+
+async def test_documento_detail_renders_rdo_edit_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _build_app(monkeypatch)
+    doc = SimpleNamespace(
+        id=uuid.uuid4(),
+        tipo="rdo",
+        titulo="RDO OBRA-1",
+        status=DocumentStatus.RASCUNHO_GERADO,
+        obra_id="OBRA-1",
+        revisao="REV00",
+        metadata_json={
+            "campos_editaveis": {
+                "clima": "Sol",
+                "equipe": ["Mestre João", "2 pedreiros"],
+                "equipamentos": [],
+                "observacoes": ["Sem interferências."],
+                "complementos_engenheiro": [],
+            }
+        },
+    )
+    monkeypatch.setattr(
+        admin_route.admin_service,
+        "get_documento_com_triagem",
+        AsyncMock(return_value=(doc, None)),
+    )
+
+    async with _client(app) as client:
+        await _login(client)
+        resp = await client.get(f"/admin/documentos/{doc.id}")
+
+    assert resp.status_code == 200
+    assert "Complementos do RDO" in resp.text
+    assert "Sol" in resp.text
+    assert "Mestre João" in resp.text
+
+
+async def test_documento_rdo_campos_submit_updates_and_redirects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _build_app(monkeypatch)
+    update = AsyncMock(
+        return_value={
+            "documento_id": "doc-1",
+            "status": "EM_REVISAO",
+            "bucket_uri": "s3://bucket/rdo.html",
+        }
+    )
+    monkeypatch.setattr(admin_route.rdo_service, "update_rdo_draft_fields", update)
+    did = uuid.uuid4()
+
+    async with _client(app) as client:
+        await _login(client)
+        resp = await client.post(
+            f"/admin/documentos/{did}/rdo-campos",
+            data={
+                "editor": "engenheiro",
+                "clima": "Sol",
+                "equipe": "Mestre João\n2 pedreiros",
+                "equipamentos": "Betoneira",
+                "observacoes": "Sem interferências.",
+                "complementos_engenheiro": "Liberar frente amanhã.",
+            },
+            follow_redirects=False,
+        )
+
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/admin/documentos/{did}?rdo_campos=ok"
+    update.assert_awaited_once()
+    assert update.await_args.kwargs["documento_id"] == str(did)
+    assert update.await_args.kwargs["campos"]["equipe"] == "Mestre João\n2 pedreiros"
+
 async def test_aprovar_documento_aprovado(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _build_app(monkeypatch)
     approve = AsyncMock(

@@ -4,10 +4,20 @@
   <meta charset="utf-8" />
   <title>RDO {{ obra.id }} — {{ data_ref }}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 2rem; }
-    h1 { color: #1a365d; }
-    .meta { color: #555; margin-bottom: 1.5rem; }
-    pre { background: #f7fafc; padding: 1rem; border-radius: 4px; }
+    body { font-family: Arial, sans-serif; margin: 2rem; color: #1f2937; }
+    h1 { color: #1a365d; margin-bottom: .25rem; }
+    h2 { color: #1a365d; border-bottom: 1px solid #cbd5e1; padding-bottom: .25rem; }
+    h3 { color: #334155; margin-bottom: .25rem; }
+    table { border-collapse: collapse; width: 100%; margin: .5rem 0 1.25rem; }
+    th, td { border: 1px solid #cbd5e1; padding: .45rem .55rem; text-align: left; vertical-align: top; }
+    th { background: #f1f5f9; }
+    .meta { color: #475569; margin-bottom: 1.5rem; }
+    .muted { color: #64748b; }
+    .break { overflow-wrap: anywhere; }
+    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: .5rem; }
+    .metric { border: 1px solid #cbd5e1; padding: .5rem; background: #f8fafc; }
+    .metric strong { display: block; font-size: 1.25rem; color: #1a365d; }
+    @media print { body { margin: 1.2cm; } }
   </style>
 </head>
 <body>
@@ -18,11 +28,116 @@
     <p><strong>Revisão:</strong> {{ revisao }}</p>
     <p><strong>Gerado por:</strong> {{ generated_by }}</p>
   </div>
-  <h2>Conteúdo</h2>
+
+  <h2>Resumo Operacional</h2>
+  <div class="grid">
+    <div class="metric"><strong>{{ conteudo.resumo_operacional.entradas_count or 0 }}</strong>entradas</div>
+    <div class="metric"><strong>{{ conteudo.resumo_operacional.triagens_count or 0 }}</strong>triagens</div>
+    <div class="metric"><strong>{{ conteudo.resumo_operacional.fotos_count or 0 }}</strong>fotos</div>
+    <div class="metric"><strong>{{ conteudo.resumo_operacional.audios_count or 0 }}</strong>áudios</div>
+    <div class="metric"><strong>{{ conteudo.resumo_operacional.arquivos_count or 0 }}</strong>arquivos</div>
+  </div>
+
+  <h2>Complementos do Engenheiro</h2>
+  {% set campos = conteudo.campos_editaveis or {} %}
+  <p><strong>Clima:</strong> {{ campos.clima or "—" }}</p>
+  <h3>Equipe</h3>
   <ul>
-  {% for key, value in conteudo.items() %}
-    <li><strong>{{ key }}:</strong> {{ value }}</li>
-  {% endfor %}
+    {% for item in campos.equipe %}<li>{{ item }}</li>{% else %}<li class="muted">Não informado.</li>{% endfor %}
   </ul>
+  <h3>Equipamentos</h3>
+  <ul>
+    {% for item in campos.equipamentos %}<li>{{ item }}</li>{% else %}<li class="muted">Não informado.</li>{% endfor %}
+  </ul>
+  <h3>Observações</h3>
+  <ul>
+    {% for item in campos.observacoes %}<li>{{ item }}</li>{% else %}<li class="muted">Sem observações.</li>{% endfor %}
+  </ul>
+  <h3>Complementos</h3>
+  <ul>
+    {% for item in campos.complementos_engenheiro %}<li>{{ item }}</li>{% else %}<li class="muted">Sem complementos.</li>{% endfor %}
+  </ul>
+
+  <h2>Entradas e Triagens</h2>
+  <table>
+    <thead>
+      <tr><th>Hora</th><th>Fonte</th><th>Autor</th><th>Status</th><th>Conteúdo</th><th>Triagem</th></tr>
+    </thead>
+    <tbody>
+    {% for item in conteudo.servicos %}
+      <tr>
+        <td>{{ item.created_at or "—" }}</td>
+        <td>{{ item.source }}</td>
+        <td>{{ item.author or "—" }}</td>
+        <td>{{ item.status or "—" }}</td>
+        <td class="break">{{ item.text or "—" }}</td>
+        <td class="break">
+          {% for triagem in item.triagens %}
+            <p><strong>{{ triagem.tipo_documento }}</strong> — {{ triagem.resumo or "Sem resumo." }}</p>
+          {% else %}
+            <span class="muted">Sem triagem.</span>
+          {% endfor %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6">Nenhuma entrada registrada.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Pendências</h2>
+  <ul>
+    {% for pendencia in conteudo.pendencias %}<li>{{ pendencia }}</li>{% else %}<li class="muted">Sem pendências extraídas.</li>{% endfor %}
+  </ul>
+
+  <h2>Fotos</h2>
+  <table>
+    <thead><tr><th>Hora</th><th>Descrição</th><th>Arquivo</th></tr></thead>
+    <tbody>
+    {% for foto in conteudo.fotos %}
+      <tr>
+        <td>{{ foto.created_at or foto.data_foto or "—" }}</td>
+        <td class="break">{{ foto.descricao or "Sem descrição." }}</td>
+        <td class="break">{{ foto.bucket_uri }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="3">Nenhuma foto registrada.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Áudios e Documentos</h2>
+  <table>
+    <thead><tr><th>Tipo</th><th>Hora</th><th>Conteúdo</th><th>Arquivo</th></tr></thead>
+    <tbody>
+    {% for audio in conteudo.audios %}
+      <tr>
+        <td>Áudio</td>
+        <td>{{ audio.created_at or "—" }}</td>
+        <td class="break">{{ audio.transcricao or "Sem transcrição." }}</td>
+        <td class="break">{{ audio.bucket_uri }}</td>
+      </tr>
+    {% endfor %}
+    {% for documento in conteudo.documentos_brutos %}
+      <tr>
+        <td>Documento</td>
+        <td>{{ documento.created_at or "—" }}</td>
+        <td class="break">{{ documento.nome_original or documento.mime_type or "Arquivo bruto" }}</td>
+        <td class="break">{{ documento.bucket_uri }}</td>
+      </tr>
+    {% endfor %}
+    {% if not conteudo.audios and not conteudo.documentos_brutos %}
+      <tr><td colspan="4">Nenhum áudio ou documento bruto registrado.</td></tr>
+    {% endif %}
+    </tbody>
+  </table>
+
+  <h2>Rastreabilidade</h2>
+  <p><strong>Entradas:</strong>
+    {% for entrada_id in conteudo.source_entrada_ids %}{{ entrada_id }}{% if not loop.last %}, {% endif %}{% else %}<span class="muted">nenhuma</span>{% endfor %}
+  </p>
+  <p><strong>Arquivos:</strong>
+    {% for arquivo_id in conteudo.source_arquivo_ids %}{{ arquivo_id }}{% if not loop.last %}, {% endif %}{% else %}<span class="muted">nenhum</span>{% endfor %}
+  </p>
 </body>
 </html>

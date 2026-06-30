@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -32,10 +32,13 @@ async def test_aggregate_daily_rdo_builds_structured_content() -> None:
     foto_id = uuid.uuid4()
     audio_id = uuid.uuid4()
     triagem_id = uuid.uuid4()
+    created_at = datetime(2026, 6, 27, 14, 30, tzinfo=UTC)
     entrada = SimpleNamespace(
         id=entrada_id,
         source="openclaw",
+        status="completed",
         author="eng",
+        created_at=created_at,
         text="executamos alvenaria",
         storage_uri="s3://bucket/envelope.json",
     )
@@ -46,6 +49,7 @@ async def test_aggregate_daily_rdo_builds_structured_content() -> None:
         tipo_documento="rdo",
         confianca=0.9,
         resumo="Alvenaria executada",
+        created_at=created_at,
         campos_extraidos={"pendencias": ["argamassa amanhã"]},
         acao_sugerida="incluir no RDO",
         precisa_aprovacao=True,
@@ -56,11 +60,21 @@ async def test_aggregate_daily_rdo_builds_structured_content() -> None:
         tipo="documento",
         nome_original="nota.pdf",
         mime_type="application/pdf",
+        created_at=created_at,
         bucket_uri="s3://bucket/nota.pdf",
         hash_sha256="h" * 64,
     )
-    foto = SimpleNamespace(id=foto_id, data_foto=date(2026, 6, 27), descricao="Parede pronta")
-    audio = SimpleNamespace(id=audio_id, transcricao="Equipe finalizou o trecho")
+    foto = SimpleNamespace(
+        id=foto_id,
+        data_foto=date(2026, 6, 27),
+        created_at=created_at,
+        descricao="Parede pronta",
+    )
+    audio = SimpleNamespace(
+        id=audio_id,
+        created_at=created_at,
+        transcricao="Equipe finalizou o trecho",
+    )
     session = AsyncMock()
     session.get = AsyncMock(return_value=Obra(id="OBRA-001", nome="Obra Um", slug="obra-um"))
     session.execute = AsyncMock(
@@ -81,6 +95,8 @@ async def test_aggregate_daily_rdo_builds_structured_content() -> None:
     assert content["source_entrada_ids"] == [str(entrada_id)]
     assert str(arquivo_id) in content["source_arquivo_ids"]
     assert content["resumo_operacional"]["entradas_count"] == 1
+    assert content["servicos"][0]["status"] == "completed"
+    assert content["servicos"][0]["created_at"] == created_at.isoformat()
     assert content["servicos"][0]["triagens"][0]["resumo"] == "Alvenaria executada"
     assert content["pendencias"] == ["argamassa amanhã"]
     assert content["fotos"][0]["descricao"] == "Parede pronta"

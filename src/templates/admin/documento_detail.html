@@ -28,6 +28,35 @@
   {% endif %}
 </div>
 
+{% if rdo_editable %}
+<div class="card">
+  <h2>Complementos do RDO</h2>
+  {% if rdo_campos_sucesso %}
+    <p class="sucesso">Campos atualizados e rascunho regenerado.</p>
+  {% endif %}
+  <form method="post" action="/admin/documentos/{{ documento.id }}/rdo-campos">
+    <label for="editor">Editor</label>
+    <input type="text" id="editor" name="editor" value="engenheiro" />
+
+    <label for="clima">Clima</label>
+    <input type="text" id="clima" name="clima" value="{{ rdo_campos.clima }}" />
+
+    <label for="equipe">Equipe</label>
+    <textarea class="wide-field" id="equipe" name="equipe" rows="4">{{ rdo_campos.equipe }}</textarea>
+
+    <label for="equipamentos">Equipamentos</label>
+    <textarea class="wide-field" id="equipamentos" name="equipamentos" rows="3">{{ rdo_campos.equipamentos }}</textarea>
+
+    <label for="observacoes">Observações</label>
+    <textarea class="wide-field" id="observacoes" name="observacoes" rows="4">{{ rdo_campos.observacoes }}</textarea>
+
+    <label for="complementos_engenheiro">Complementos do engenheiro</label>
+    <textarea class="wide-field" id="complementos_engenheiro" name="complementos_engenheiro" rows="4">{{ rdo_campos.complementos_engenheiro }}</textarea>
+
+    <p><button type="submit">Salvar complementos</button></p>
+  </form>
+</div>
+{% endif %}
 {% if aguardando_aprovacao %}
 <div class="card">
   <h2>Aprovação</h2>
