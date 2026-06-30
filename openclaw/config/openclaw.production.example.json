@@ -24,6 +24,25 @@
       "documentos"
     ]
   },
+  "tools": {
+    "profile": "coding",
+    "alsoAllow": ["agents_list", "sessions_spawn", "sessions_yield", "subagents"]
+  },
+  "plugins": {
+    "bundledDiscovery": "allowlist",
+    "allow": [
+      "browser",
+      "canvas",
+      "codex",
+      "device-pair",
+      "file-transfer",
+      "memory-core",
+      "openai",
+      "phone-control",
+      "talk-voice",
+      "telegram"
+    ]
+  },
   "agents": {
     "ceo": {
       "workspace": "./openclaw/agents/ceo",
