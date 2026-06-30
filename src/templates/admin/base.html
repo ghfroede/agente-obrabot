@@ -6,28 +6,171 @@
   <title>{% block title %}Painel Obrabot{% endblock %}</title>
   <script src="/admin/static/htmx.min.js"></script>
   <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, Arial, sans-serif; margin: 0; background: #f7fafc; color: #1a202c; }
-    nav { background: #1a365d; color: #fff; padding: 0.75rem 1.5rem; display: flex; gap: 1.25rem; align-items: center; }
-    nav a { color: #fff; text-decoration: none; font-weight: 600; }
-    nav a:hover { text-decoration: underline; }
+    /* ===== Liquid Glass design system (web) ===== */
+    :root {
+      color-scheme: light dark;
+      --ink: #15233b; --brand: #1a365d; --bg-0: #eef2f9;
+      --glass-bg: rgba(255,255,255,.55); --glass-brd: rgba(255,255,255,.65);
+      --glass-shadow: 0 8px 30px rgba(20,35,59,.18);
+      --btn-bg: linear-gradient(135deg, rgba(56,120,210,.88), rgba(37,99,180,.94));
+      --ease: cubic-bezier(.22,.61,.36,1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif; margin: 0; color: var(--ink);
+      min-height: 100vh; background-attachment: fixed;
+      background:
+        radial-gradient(900px 600px at 12% -10%, #cfe0ff 0%, transparent 60%),
+        radial-gradient(820px 520px at 100% 0%, #d8f3ee 0%, transparent 55%),
+        radial-gradient(720px 720px at 50% 120%, #e7ddff 0%, transparent 60%),
+        var(--bg-0);
+    }
+    /* slow drifting light so the glass has something to refract */
+    body::before {
+      content: ""; position: fixed; inset: -20%; z-index: -1; pointer-events: none;
+      background:
+        radial-gradient(600px 420px at 20% 30%, rgba(86,144,255,.20), transparent 60%),
+        radial-gradient(520px 380px at 80% 70%, rgba(64,209,184,.18), transparent 60%);
+      animation: drift 26s var(--ease) infinite alternate;
+    }
+    @keyframes drift { to { transform: translate3d(0,-3%,0) scale(1.06); } }
+
+    nav {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; gap: 1.25rem; align-items: center; padding: .75rem 1.5rem; color: #fff;
+      background: linear-gradient(135deg, rgba(26,54,93,.72), rgba(26,54,93,.55));
+      -webkit-backdrop-filter: blur(18px) saturate(180%); backdrop-filter: blur(18px) saturate(180%);
+      border-bottom: 1px solid rgba(255,255,255,.18); box-shadow: 0 6px 24px rgba(20,35,59,.25);
+    }
+    nav a { color: #fff; text-decoration: none; font-weight: 600; position: relative; padding: .15rem .1rem; transition: opacity .2s var(--ease); }
+    nav a:hover { opacity: .85; }
+    nav a::after { content: ""; position: absolute; left: 0; right: 100%; bottom: -3px; height: 2px; background: #fff; border-radius: 2px; transition: right .25s var(--ease); }
+    nav a:hover::after { right: 0; }
     nav .spacer { flex: 1; }
     nav form { margin: 0; }
-    nav button { background: transparent; border: 1px solid #fff; color: #fff; padding: 0.3rem 0.7rem; border-radius: 4px; cursor: pointer; }
-    main { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
-    h1 { color: #1a365d; }
-    table { border-collapse: collapse; width: 100%; background: #fff; }
-    th, td { border: 1px solid #e2e8f0; padding: 0.5rem 0.75rem; text-align: left; }
-    th { background: #edf2f7; }
-    pre { background: #1a202c; color: #f7fafc; padding: 1rem; border-radius: 6px; overflow: auto; }
+
+    main { padding: 1.75rem 1.5rem; max-width: 1100px; margin: 0 auto; }
+    h1 { color: var(--brand); letter-spacing: -.02em; }
+    h2 { color: var(--brand); }
+
+    /* ----- glass buttons ----- */
+    button, input[type=submit] {
+      font: inherit; font-weight: 600; color: #fff; cursor: pointer;
+      padding: .5rem 1.15rem; border-radius: 14px; border: 1px solid rgba(255,255,255,.35);
+      background: var(--btn-bg); position: relative; overflow: hidden; isolation: isolate;
+      -webkit-backdrop-filter: blur(8px) saturate(160%); backdrop-filter: blur(8px) saturate(160%);
+      box-shadow: 0 4px 14px rgba(37,99,180,.35), inset 0 1px 0 rgba(255,255,255,.45);
+      transition: transform .18s var(--ease), box-shadow .25s var(--ease), filter .2s var(--ease);
+    }
+    button::before, input[type=submit]::before {
+      content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+      background: linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0) 45%);
+      opacity: .85; transition: opacity .25s var(--ease);
+    }
+    button:hover, input[type=submit]:hover {
+      transform: translateY(-2px); filter: brightness(1.05);
+      box-shadow: 0 10px 26px rgba(37,99,180,.45), inset 0 1px 0 rgba(255,255,255,.6);
+    }
+    button:active, input[type=submit]:active {
+      transform: translateY(0) scale(.97);
+      box-shadow: 0 3px 10px rgba(37,99,180,.35), inset 0 2px 6px rgba(20,35,59,.25);
+    }
+    button:focus-visible, input[type=submit]:focus-visible {
+      outline: none; box-shadow: 0 0 0 3px rgba(86,144,255,.5), 0 8px 20px rgba(37,99,180,.4);
+    }
+    /* nav "Sair" sits on dark glass → lighter translucent variant */
+    nav button {
+      color: #fff; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.4);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+    }
+    nav button::before { opacity: .4; }
+    nav button:hover { background: rgba(255,255,255,.24); }
+
+    main a { color: #2563b4; text-decoration: none; font-weight: 600; transition: color .2s var(--ease); }
+    main a:hover { color: #1a365d; text-decoration: underline; }
+
+    /* primary action links rendered as glass buttons (no template change needed) */
+    a.btn, main p > a[href$="/nova"], td a[href*="/editar"] {
+      display: inline-block; color: #fff !important; text-decoration: none !important;
+      padding: .4rem .95rem; border-radius: 12px; border: 1px solid rgba(255,255,255,.35);
+      background: var(--btn-bg);
+      -webkit-backdrop-filter: blur(8px) saturate(160%); backdrop-filter: blur(8px) saturate(160%);
+      box-shadow: 0 4px 14px rgba(37,99,180,.3), inset 0 1px 0 rgba(255,255,255,.45);
+      transition: transform .18s var(--ease), box-shadow .25s var(--ease), filter .2s var(--ease);
+    }
+    a.btn:hover, main p > a[href$="/nova"]:hover, td a[href*="/editar"]:hover {
+      transform: translateY(-2px); filter: brightness(1.05);
+      box-shadow: 0 10px 26px rgba(37,99,180,.42), inset 0 1px 0 rgba(255,255,255,.6);
+    }
+    a.btn:active, main p > a[href$="/nova"]:active, td a[href*="/editar"]:active { transform: translateY(0) scale(.97); }
+
+    /* ----- glass surfaces ----- */
+    .card {
+      background: var(--glass-bg); border: 1px solid var(--glass-brd); border-radius: 18px;
+      padding: 1.25rem 1.4rem; margin-bottom: 1.25rem;
+      -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
+      box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,.6);
+      transition: transform .25s var(--ease), box-shadow .25s var(--ease);
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 14px 40px rgba(20,35,59,.22), inset 0 1px 0 rgba(255,255,255,.6); }
+
+    table {
+      border-collapse: separate; border-spacing: 0; width: 100%; border-radius: 16px; overflow: hidden;
+      background: var(--glass-bg);
+      -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
+      box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,.5);
+    }
+    th, td { padding: .65rem .85rem; text-align: left; border-bottom: 1px solid rgba(20,35,59,.10); }
+    th { background: rgba(255,255,255,.35); color: var(--brand); font-weight: 700; }
+    tbody tr { transition: background .18s var(--ease); }
+    tbody tr:hover { background: rgba(255,255,255,.38); }
+    tr:last-child td { border-bottom: none; }
+
+    pre {
+      background: rgba(16,24,39,.92); color: #eef2f9; padding: 1rem; border-radius: 14px; overflow: auto;
+      box-shadow: var(--glass-shadow);
+    }
     .erro { color: #c53030; font-weight: 600; }
     .sucesso { color: #2f855a; font-weight: 600; }
-    .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 10px; background: #e2e8f0; font-size: 0.85rem; }
-    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
-    button, input[type=submit] { cursor: pointer; }
+    .badge {
+      display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .85rem; font-weight: 600;
+      background: rgba(255,255,255,.5); border: 1px solid rgba(255,255,255,.6);
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
+    }
     form.inline { display: inline; margin: 0; }
-    label { display: block; margin: 0.5rem 0 0.2rem; font-weight: 600; }
-    input[type=text], input[type=password], select, textarea { padding: 0.4rem; width: 100%; max-width: 420px; box-sizing: border-box; }
+    label { display: block; margin: .6rem 0 .25rem; font-weight: 600; color: var(--brand); }
+    input[type=text], input[type=password], select, textarea {
+      font: inherit; padding: .55rem .7rem; width: 100%; max-width: 420px; box-sizing: border-box;
+      border-radius: 12px; border: 1px solid rgba(20,35,59,.18); background: rgba(255,255,255,.6);
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+      transition: border-color .2s var(--ease), box-shadow .2s var(--ease), background .2s var(--ease);
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: #5690ff; background: rgba(255,255,255,.82);
+      box-shadow: 0 0 0 3px rgba(86,144,255,.25);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root { --ink: #e9eef7; --bg-0: #0c1220; --glass-bg: rgba(30,41,66,.55); --glass-brd: rgba(255,255,255,.14); }
+      body {
+        background:
+          radial-gradient(900px 600px at 12% -10%, #1b2c52 0%, transparent 60%),
+          radial-gradient(820px 520px at 100% 0%, #123833 0%, transparent 55%),
+          radial-gradient(720px 720px at 50% 120%, #241b46 0%, transparent 60%),
+          var(--bg-0);
+      }
+      h1, h2, th, label { color: #cfe0ff; }
+      main a { color: #8fb4ff; } main a:hover { color: #cfe0ff; }
+      th { background: rgba(255,255,255,.06); }
+      tbody tr:hover { background: rgba(255,255,255,.06); }
+      .badge { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.18); color: #e9eef7; }
+      input[type=text], input[type=password], select, textarea {
+        background: rgba(20,28,46,.6); color: #e9eef7; border-color: rgba(255,255,255,.16);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before { animation: none !important; transition: none !important; }
+    }
   </style>
 </head>
 <body>
