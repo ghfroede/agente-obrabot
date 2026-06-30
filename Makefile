@@ -1,4 +1,6 @@
-.PHONY: dev dev-api dev-worker build start-api start-worker test lint typecheck db-migrate install sync smoke-s3 smoke-api smoke-openclaw
+.PHONY: dev dev-api dev-worker build start-api start-worker test lint typecheck db-migrate install sync smoke-s3 smoke-api smoke-openclaw smoke-prod smoke-prod-railway
+
+PROD_API_URL ?= https://api-production-8bfb.up.railway.app
 
 UV ?= uv
 
@@ -42,4 +44,10 @@ smoke-api:
 	$(UV) run python scripts/smoke_api.py $(BASE_URL)
 
 smoke-openclaw:
-	$(UV) run python scripts/smoke_openclaw.py $(BASE_URL)
+	$(UV) run python scripts/smoke_openclaw.py $(or $(BASE_URL),$(PROD_API_URL))
+
+smoke-prod:
+	$(UV) run python scripts/smoke_prod.py
+
+smoke-prod-railway:
+	railway run --service api $(UV) run python scripts/smoke_prod.py
