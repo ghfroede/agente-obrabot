@@ -9,16 +9,22 @@
     /* ===== Liquid Glass design system (web) ===== */
     :root {
       color-scheme: light dark;
-      --ink: #15233b; --brand: #1a365d; --bg-0: #eef2f9;
+      --ink: #15233b; --ink-soft: #41506b; --brand: #1a365d; --brand-2: #2563b4; --bg-0: #eef2f9;
       --glass-bg: rgba(255,255,255,.55); --glass-brd: rgba(255,255,255,.65);
       --glass-shadow: 0 8px 30px rgba(20,35,59,.18);
       --btn-bg: linear-gradient(135deg, rgba(56,120,210,.88), rgba(37,99,180,.94));
-      --ease: cubic-bezier(.22,.61,.36,1);
+      --ease: cubic-bezier(.22,.61,.36,1); --spring: cubic-bezier(.34,1.56,.64,1);
+      /* semantic tones */
+      --ok: #2f855a; --ok-bg: rgba(47,133,90,.14); --ok-brd: rgba(47,133,90,.30);
+      --warn: #b7791f; --warn-bg: rgba(183,121,31,.15); --warn-brd: rgba(183,121,31,.32);
+      --bad: #c53030; --bad-bg: rgba(197,48,48,.13); --bad-brd: rgba(197,48,48,.30);
+      /* z-index scale */
+      --z-nav: 100;
     }
     * { box-sizing: border-box; }
     body {
       font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif; margin: 0; color: var(--ink);
-      min-height: 100vh; background-attachment: fixed;
+      min-height: 100dvh; background-attachment: fixed; -webkit-font-smoothing: antialiased;
       background:
         radial-gradient(900px 600px at 12% -10%, #cfe0ff 0%, transparent 60%),
         radial-gradient(820px 520px at 100% 0%, #d8f3ee 0%, transparent 55%),
@@ -35,23 +41,52 @@
     }
     @keyframes drift { to { transform: translate3d(0,-3%,0) scale(1.06); } }
 
+    /* custom scrollbar */
+    * { scrollbar-width: thin; scrollbar-color: rgba(37,99,180,.4) transparent; }
+    *::-webkit-scrollbar { width: 10px; height: 10px; }
+    *::-webkit-scrollbar-thumb { background: rgba(37,99,180,.35); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+    *::-webkit-scrollbar-thumb:hover { background: rgba(37,99,180,.55); background-clip: content-box; }
+
+    /* ===== nav ===== */
     nav {
-      position: sticky; top: 0; z-index: 10;
-      display: flex; gap: 1.25rem; align-items: center; padding: .75rem 1.5rem; color: #fff;
-      background: linear-gradient(135deg, rgba(26,54,93,.72), rgba(26,54,93,.55));
+      position: sticky; top: 0; z-index: var(--z-nav);
+      display: flex; gap: .35rem; align-items: center; padding: .6rem 1.4rem; color: #fff;
+      background: linear-gradient(135deg, rgba(26,54,93,.74), rgba(26,54,93,.56));
       -webkit-backdrop-filter: blur(18px) saturate(180%); backdrop-filter: blur(18px) saturate(180%);
       border-bottom: 1px solid rgba(255,255,255,.18); box-shadow: 0 6px 24px rgba(20,35,59,.25);
     }
-    nav a { color: #fff; text-decoration: none; font-weight: 600; position: relative; padding: .15rem .1rem; transition: opacity .2s var(--ease); }
-    nav a:hover { opacity: .85; }
-    nav a::after { content: ""; position: absolute; left: 0; right: 100%; bottom: -3px; height: 2px; background: #fff; border-radius: 2px; transition: right .25s var(--ease); }
-    nav a:hover::after { right: 0; }
+    .brand {
+      display: flex; align-items: center; gap: .55rem; font-weight: 800; letter-spacing: -.02em;
+      color: #fff; text-decoration: none; margin-right: .75rem; font-size: 1.05rem;
+    }
+    .brand svg { width: 26px; height: 26px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.25)); }
+    .nav-link {
+      display: inline-flex; align-items: center; gap: .4rem; color: #fff; text-decoration: none;
+      font-weight: 600; padding: .42rem .7rem; border-radius: 11px; position: relative;
+      transition: background .2s var(--ease), transform .2s var(--ease);
+    }
+    .nav-link svg { width: 17px; height: 17px; opacity: .9; }
+    .nav-link:hover { background: rgba(255,255,255,.12); transform: translateY(-1px); }
+    .nav-link[aria-current="page"] {
+      background: rgba(255,255,255,.18); box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+    }
+    .nav-link[aria-current="page"]::after {
+      content: ""; position: absolute; left: 18%; right: 18%; bottom: -.6rem; height: 2.5px;
+      background: linear-gradient(90deg, #7fb0ff, #5ce0c8); border-radius: 3px;
+    }
     nav .spacer { flex: 1; }
     nav form { margin: 0; }
 
-    main { padding: 1.75rem 1.5rem; max-width: 1100px; margin: 0 auto; }
-    h1 { color: var(--brand); letter-spacing: -.02em; }
-    h2 { color: var(--brand); }
+    main { padding: 1.9rem 1.5rem; max-width: 1100px; margin: 0 auto; }
+    /* page entrance: stagger direct children of main */
+    main > * { animation: rise .55s var(--ease) both; }
+    main > *:nth-child(1){animation-delay:.02s} main > *:nth-child(2){animation-delay:.08s}
+    main > *:nth-child(3){animation-delay:.14s} main > *:nth-child(4){animation-delay:.20s}
+    main > *:nth-child(5){animation-delay:.26s} main > *:nth-child(n+6){animation-delay:.30s}
+    @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+    h1 { color: var(--brand); letter-spacing: -.025em; font-size: 1.85rem; margin: .2rem 0 1.1rem; }
+    h2 { color: var(--brand); letter-spacing: -.015em; }
 
     /* ----- glass buttons ----- */
     button, input[type=submit] {
@@ -60,13 +95,20 @@
       background: var(--btn-bg); position: relative; overflow: hidden; isolation: isolate;
       -webkit-backdrop-filter: blur(8px) saturate(160%); backdrop-filter: blur(8px) saturate(160%);
       box-shadow: 0 4px 14px rgba(37,99,180,.35), inset 0 1px 0 rgba(255,255,255,.45);
-      transition: transform .18s var(--ease), box-shadow .25s var(--ease), filter .2s var(--ease);
+      transition: transform .18s var(--spring), box-shadow .25s var(--ease), filter .2s var(--ease);
     }
     button::before, input[type=submit]::before {
       content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
       background: linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0) 45%);
       opacity: .85; transition: opacity .25s var(--ease);
     }
+    /* sheen sweep on hover */
+    button::after, input[type=submit]::after, a.btn::after {
+      content: ""; position: absolute; top: 0; left: -120%; width: 70%; height: 100%; z-index: -1;
+      background: linear-gradient(105deg, transparent, rgba(255,255,255,.45), transparent);
+      transform: skewX(-18deg); transition: left .6s var(--ease);
+    }
+    button:hover::after, input[type=submit]:hover::after, a.btn:hover::after { left: 140%; }
     button:hover, input[type=submit]:hover {
       transform: translateY(-2px); filter: brightness(1.05);
       box-shadow: 0 10px 26px rgba(37,99,180,.45), inset 0 1px 0 rgba(255,255,255,.6);
@@ -81,22 +123,22 @@
     /* nav "Sair" sits on dark glass → lighter translucent variant */
     nav button {
       color: #fff; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.4);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.3); padding: .42rem .9rem; border-radius: 11px;
     }
     nav button::before { opacity: .4; }
     nav button:hover { background: rgba(255,255,255,.24); }
 
-    main a { color: #2563b4; text-decoration: none; font-weight: 600; transition: color .2s var(--ease); }
-    main a:hover { color: #1a365d; text-decoration: underline; }
+    main a { color: var(--brand-2); text-decoration: none; font-weight: 600; transition: color .2s var(--ease); }
+    main a:hover { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
 
     /* primary action links rendered as glass buttons (no template change needed) */
     a.btn, main p > a[href$="/nova"], td a[href*="/editar"] {
       display: inline-block; color: #fff !important; text-decoration: none !important;
       padding: .4rem .95rem; border-radius: 12px; border: 1px solid rgba(255,255,255,.35);
-      background: var(--btn-bg);
+      background: var(--btn-bg); position: relative; overflow: hidden; isolation: isolate;
       -webkit-backdrop-filter: blur(8px) saturate(160%); backdrop-filter: blur(8px) saturate(160%);
       box-shadow: 0 4px 14px rgba(37,99,180,.3), inset 0 1px 0 rgba(255,255,255,.45);
-      transition: transform .18s var(--ease), box-shadow .25s var(--ease), filter .2s var(--ease);
+      transition: transform .18s var(--spring), box-shadow .25s var(--ease), filter .2s var(--ease);
     }
     a.btn:hover, main p > a[href$="/nova"]:hover, td a[href*="/editar"]:hover {
       transform: translateY(-2px); filter: brightness(1.05);
@@ -112,6 +154,8 @@
       box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,.6);
       transition: transform .25s var(--ease), box-shadow .25s var(--ease);
     }
+    .card > :first-child { margin-top: 0; }
+    .card > :last-child { margin-bottom: 0; }
     .card:hover { transform: translateY(-2px); box-shadow: 0 14px 40px rgba(20,35,59,.22), inset 0 1px 0 rgba(255,255,255,.6); }
 
     table {
@@ -121,27 +165,37 @@
       box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,.5);
     }
     th, td { padding: .65rem .85rem; text-align: left; border-bottom: 1px solid rgba(20,35,59,.10); }
-    th { background: rgba(255,255,255,.35); color: var(--brand); font-weight: 700; }
+    th { background: rgba(255,255,255,.4); color: var(--brand); font-weight: 700;
+         position: sticky; top: 0; backdrop-filter: blur(6px); }
     tbody tr { transition: background .18s var(--ease); }
-    tbody tr:hover { background: rgba(255,255,255,.38); }
+    tbody tr:hover { background: rgba(255,255,255,.42); }
     tr:last-child td { border-bottom: none; }
+    /* zebra for readability on dense tables */
+    tbody tr:nth-child(even) { background: rgba(255,255,255,.16); }
+    tbody tr:nth-child(even):hover { background: rgba(255,255,255,.42); }
 
     pre {
       background: rgba(16,24,39,.92); color: #eef2f9; padding: 1rem; border-radius: 14px; overflow: auto;
-      box-shadow: var(--glass-shadow);
+      box-shadow: var(--glass-shadow); line-height: 1.5;
     }
-    .erro { color: #c53030; font-weight: 600; }
-    .sucesso { color: #2f855a; font-weight: 600; }
+    .erro { color: var(--bad); font-weight: 600; }
+    .sucesso { color: var(--ok); font-weight: 600; }
     .badge {
-      display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .85rem; font-weight: 600;
-      background: rgba(255,255,255,.5); border: 1px solid rgba(255,255,255,.6);
+      display: inline-flex; align-items: center; gap: .35rem; padding: .15rem .6rem; border-radius: 999px;
+      font-size: .82rem; font-weight: 600; line-height: 1.5;
+      background: rgba(255,255,255,.5); border: 1px solid rgba(255,255,255,.6); color: var(--ink-soft);
       -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
     }
+    /* leading dot so meaning is not color-only */
+    .badge::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: currentColor; opacity: .8; flex: none; }
+    .badge[data-tone="ok"]   { color: var(--ok);   background: var(--ok-bg);   border-color: var(--ok-brd); }
+    .badge[data-tone="warn"] { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-brd); }
+    .badge[data-tone="bad"]  { color: var(--bad);  background: var(--bad-bg);  border-color: var(--bad-brd); }
     form.inline { display: inline; margin: 0; }
     label { display: block; margin: .6rem 0 .25rem; font-weight: 600; color: var(--brand); }
     input[type=text], input[type=password], input[type=date], select, textarea {
       font: inherit; padding: .55rem .7rem; width: 100%; max-width: 420px; box-sizing: border-box;
-      border-radius: 12px; border: 1px solid rgba(20,35,59,.18); background: rgba(255,255,255,.6);
+      border-radius: 12px; border: 1px solid rgba(20,35,59,.18); background: rgba(255,255,255,.6); color: var(--ink);
       -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
       transition: border-color .2s var(--ease), box-shadow .2s var(--ease), background .2s var(--ease);
     }
@@ -152,14 +206,20 @@
     .meta-grid {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem;
     }
-    .metric { padding: .75rem; border-radius: 12px; background: rgba(255,255,255,.34); }
-    .metric strong { display: block; color: var(--brand); font-size: 1.4rem; line-height: 1.2; }
+    .metric {
+      padding: .9rem 1rem; border-radius: 14px; background: rgba(255,255,255,.38);
+      border: 1px solid rgba(255,255,255,.5); box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
+      transition: transform .2s var(--ease);
+    }
+    .metric:hover { transform: translateY(-2px); }
+    .metric strong { display: block; color: var(--brand); font-size: 1.6rem; line-height: 1.15;
+      font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
     .muted { opacity: .72; }
     .text-cell { max-width: 420px; overflow-wrap: anywhere; }
     .wide-field { max-width: 100% !important; }
     code {
       padding: .1rem .35rem; border-radius: 6px; background: rgba(16,24,39,.08);
-      overflow-wrap: anywhere;
+      overflow-wrap: anywhere; font-size: .9em;
     }
     input:focus, select:focus, textarea:focus {
       outline: none; border-color: #5690ff; background: rgba(255,255,255,.82);
@@ -167,7 +227,12 @@
     }
 
     @media (prefers-color-scheme: dark) {
-      :root { --ink: #e9eef7; --bg-0: #0c1220; --glass-bg: rgba(30,41,66,.55); --glass-brd: rgba(255,255,255,.14); }
+      :root {
+        --ink: #e9eef7; --ink-soft: #aab8d4; --bg-0: #0c1220;
+        --glass-bg: rgba(30,41,66,.55); --glass-brd: rgba(255,255,255,.14);
+        --ok-bg: rgba(72,187,120,.16); --warn-bg: rgba(214,158,46,.16); --bad-bg: rgba(245,101,101,.16);
+        --ok: #68d391; --warn: #f6c560; --bad: #fc8181;
+      }
       body {
         background:
           radial-gradient(900px 600px at 12% -10%, #1b2c52 0%, transparent 60%),
@@ -178,31 +243,58 @@
       h1, h2, th, label { color: #cfe0ff; }
       main a { color: #8fb4ff; } main a:hover { color: #cfe0ff; }
       th { background: rgba(255,255,255,.06); }
-      tbody tr:hover { background: rgba(255,255,255,.06); }
-      .badge { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.18); color: #e9eef7; }
+      tbody tr:nth-child(even) { background: rgba(255,255,255,.03); }
+      tbody tr:hover, tbody tr:nth-child(even):hover { background: rgba(255,255,255,.08); }
+      .badge { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.18); color: #aab8d4; }
       input[type=text], input[type=password], input[type=date], select, textarea {
         background: rgba(20,28,46,.6); color: #e9eef7; border-color: rgba(255,255,255,.16);
       }
-      .metric { background: rgba(255,255,255,.06); }
+      .metric { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); }
       code { background: rgba(255,255,255,.08); }
     }
     @media (max-width: 760px) {
-      nav { flex-wrap: wrap; gap: .75rem; }
+      nav { flex-wrap: wrap; gap: .4rem; padding: .55rem .9rem; }
+      .nav-link span { display: none; }
+      .nav-link { padding: .5rem; }
+      main { padding: 1.4rem 1rem; }
       .filter-form { grid-template-columns: 1fr; }
+      table { font-size: .92rem; }
     }
     @media (prefers-reduced-motion: reduce) {
-      *, *::before { animation: none !important; transition: none !important; }
+      *, *::before, *::after { animation: none !important; transition: none !important; }
     }
   </style>
 </head>
 <body>
   {% if request.session.get("admin") %}
+  {% set path = request.url.path %}
   <nav>
-    <a href="/admin">Dashboard</a>
-    <a href="/admin/obras">Obras</a>
-    <a href="/admin/dia-obra">Dia da Obra</a>
-    <a href="/admin/entradas">Entradas</a>
-    <a href="/admin/documentos">Documentos</a>
+    <a class="brand" href="/admin" aria-label="Obrabot — início">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M2 18h20"/><path d="M4 18V9a8 8 0 0 1 16 0v9"/><path d="M12 4V2"/><path d="M12 9v9"/>
+      </svg>
+      <span>Obrabot</span>
+    </a>
+    <a class="nav-link" href="/admin" {% if path == "/admin" %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+      <span>Dashboard</span>
+    </a>
+    <a class="nav-link" href="/admin/obras" {% if path.startswith("/admin/obras") %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01M9 12v.01M9 15v.01"/></svg>
+      <span>Obras</span>
+    </a>
+    <a class="nav-link" href="/admin/dia-obra" {% if path.startswith("/admin/dia-obra") %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      <span>Dia da Obra</span>
+    </a>
+    <a class="nav-link" href="/admin/entradas" {% if path.startswith("/admin/entradas") %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v12H5.2L4 17.5z"/><path d="M8 9h8M8 12h5"/></svg>
+      <span>Entradas</span>
+    </a>
+    <a class="nav-link" href="/admin/documentos" {% if path.startswith("/admin/documentos") %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>
+      <span>Documentos</span>
+    </a>
     <span class="spacer"></span>
     <form method="post" action="/admin/logout">
       <button type="submit">Sair</button>
@@ -212,5 +304,24 @@
   <main>
     {% block content %}{% endblock %}
   </main>
+  <script>
+    // progressive enhancement: tone status badges by their text (color is not the only cue — dot + text remain)
+    (function () {
+      var OK = /(aprov|public|conclu|ativ|sucesso|done|complete|finaliz|ok\b)/i;
+      var BAD = /(erro|reprov|fail|falh|inativ|cancel|rejeit|negad)/i;
+      var WARN = /(pend|aguard|process|queue|fila|review|revis|rascunho|draft|received|novo)/i;
+      function paint(root) {
+        (root || document).querySelectorAll('.badge:not([data-tone])').forEach(function (b) {
+          var t = b.textContent.trim();
+          if (OK.test(t)) b.dataset.tone = 'ok';
+          else if (BAD.test(t)) b.dataset.tone = 'bad';
+          else if (WARN.test(t)) b.dataset.tone = 'warn';
+        });
+      }
+      paint(document);
+      // re-tone fragments swapped in by HTMX
+      document.body.addEventListener('htmx:afterSwap', function (e) { paint(e.target); });
+    })();
+  </script>
 </body>
 </html>

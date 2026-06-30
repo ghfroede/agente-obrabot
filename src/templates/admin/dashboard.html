@@ -5,10 +5,16 @@
 
 <div class="card">
   <h2>Pendências</h2>
-  <p>Documentos aguardando aprovação: <span class="badge">{{ counts.aguardando_aprovacao }}</span></p>
-  <p>Entradas <code>pending_obra</code> em aberto:
-    <a href="/admin/entradas?status=pending_obra"><span class="badge">{{ counts.pending_obra }}</span></a>
-  </p>
+  <div class="meta-grid">
+    <a class="metric" href="/admin/documentos" style="text-decoration:none;">
+      <strong>{{ counts.aguardando_aprovacao }}</strong>
+      Documentos aguardando aprovação
+    </a>
+    <a class="metric" href="/admin/entradas?status=pending_obra" style="text-decoration:none;">
+      <strong>{{ counts.pending_obra }}</strong>
+      Entradas <code>pending_obra</code> em aberto
+    </a>
+  </div>
 </div>
 
 <div class="card">
@@ -18,8 +24,8 @@
     <tbody>
     {% for status, total in counts.entradas_por_status.items() %}
       <tr>
-        <td><a href="/admin/entradas?status={{ status }}">{{ status }}</a></td>
-        <td>{{ total }}</td>
+        <td><a href="/admin/entradas?status={{ status }}"><span class="badge">{{ status }}</span></a></td>
+        <td style="font-variant-numeric:tabular-nums;">{{ total }}</td>
       </tr>
     {% else %}
       <tr><td colspan="2">Nenhuma entrada registrada.</td></tr>
