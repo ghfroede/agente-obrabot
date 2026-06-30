@@ -38,9 +38,10 @@ def main() -> int:
     user_id = _first_csv_int("TELEGRAM_ALLOWED_USER_IDS")
     thread_id = _first_csv_int("TELEGRAM_ALLOWED_THREAD_IDS")
     telegram: dict[str, object] = {
-        "message_id": 1,
+        "message_id": int(datetime.now(UTC).timestamp()) % 1_000_000,
+        "date": int(datetime.now(UTC).timestamp()),
         "chat": {"id": chat_id, "type": "group" if chat_id and chat_id < 0 else "private"},
-        "text": "smoke test openclaw",
+        "text": "smoke test openclaw — registro operacional do dia",
     }
     if user_id is not None:
         telegram["from"] = {"id": user_id, "username": "smoke"}

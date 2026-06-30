@@ -624,8 +624,14 @@ def _build_reply(entrada: EntradaBruta, result: dict[str, Any]) -> tuple[int, st
 
     tipo = result.get("tipo_documento", "desconhecido")
     proximo = "aguardando aprovação" if result.get("precisa_aprovacao", True) else "registrado"
-    documento_id = str(result.get("documento_id", ""))[:8]
-    texto = f"✅ Recebido. Tipo: {tipo}. Status: {proximo}. Documento {documento_id}."
+    documento_id = str(result.get("documento_id", ""))
+    short_id = documento_id[:8] if documento_id else "?"
+    obra_id = str(result.get("obra_id") or "")
+    texto = f"✅ Recebido. Tipo: {tipo}. Status: {proximo}. Documento {short_id}."
+    if obra_id:
+        texto += f"\nPara consolidar o RDO do dia: /gerar_rdo {obra_id} hoje"
+    if tipo == "rdo" and documento_id:
+        texto += f"\nApós revisar o rascunho: /aprovar_rdo {documento_id}"
     return int(chat["id"]), texto
 
 

@@ -91,12 +91,19 @@ def test_build_reply_from_telegram_chat() -> None:
     entrada = SimpleNamespace(raw_payload={"telegram": {"chat": {"id": 555}}})
     reply = entrada_service._build_reply(
         entrada,
-        {"tipo_documento": "rdo", "documento_id": "abcd1234ef", "precisa_aprovacao": True},
+        {
+            "tipo_documento": "rdo",
+            "documento_id": "abcd1234-ef56-7890-abcd-ef1234567890",
+            "obra_id": "OBRA-001",
+            "precisa_aprovacao": True,
+        },
     )
     assert reply is not None
     chat_id, texto = reply
     assert chat_id == 555
     assert "rdo" in texto
+    assert "/gerar_rdo OBRA-001 hoje" in texto
+    assert "/aprovar_rdo abcd1234-ef56-7890-abcd-ef1234567890" in texto
 
 
 def test_build_reply_none_without_telegram() -> None:
