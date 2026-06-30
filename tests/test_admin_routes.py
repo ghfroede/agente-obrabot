@@ -325,6 +325,70 @@ async def test_documento_rdo_campos_submit_updates_and_redirects(
     assert update.await_args.kwargs["documento_id"] == str(did)
     assert update.await_args.kwargs["campos"]["equipe"] == "Mestre João\n2 pedreiros"
 
+
+async def test_documento_detail_renders_rdo_finalize_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _build_app(monkeypatch)
+    doc = SimpleNamespace(
+        id=uuid.uuid4(),
+        tipo="rdo",
+        titulo="RDO OBRA-1",
+        status=DocumentStatus.APROVADO,
+        obra_id="OBRA-1",
+        revisao="REV00",
+        data_ref=None,
+        bucket_uri="s3://bucket/rdo.html",
+        hash_sha256="h" * 64,
+        metadata_json={},
+    )
+    monkeypatch.setattr(
+        admin_route.admin_service,
+        "get_documento_com_triagem",
+        AsyncMock(return_value=(doc, None)),
+    )
+
+    async with _client(app) as client:
+        await _login(client)
+        resp = await client.get(f"/admin/documentos/{doc.id}")
+
+    assert resp.status_code == 200
+    assert "Finalizar RDO PDF" in resp.text
+    assert "s3://bucket/rdo.html" in resp.text
+
+
+async def test_documento_finalizar_rdo_redirects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _build_app(monkeypatch)
+    finalize = AsyncMock(
+        return_value={
+            "documento_id": "doc-1",
+            "status": "FINALIZADO_VALIDADO",
+            "bucket_uri": "s3://bucket/rdo.pdf",
+            "formato": "pdf",
+        }
+    )
+    monkeypatch.setattr(admin_route.rdo_service, "finalize_rdo", finalize)
+    did = uuid.uuid4()
+
+    async with _client(app) as client:
+        await _login(client)
+        resp = await client.post(
+            f"/admin/documentos/{did}/finalizar-rdo",
+            data={"aprovador": "engenheiro"},
+            follow_redirects=False,
+        )
+
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/admin/documentos/{did}?rdo_finalizado=ok"
+    finalize.assert_awaited_once_with(
+        finalize.await_args.args[0],
+        documento_id=str(did),
+        aprovador="engenheiro",
+    )
+
+
 async def test_aprovar_documento_aprovado(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _build_app(monkeypatch)
     approve = AsyncMock(

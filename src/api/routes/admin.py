@@ -15,6 +15,7 @@ from src.config.env import get_settings
 from src.core.constants import DocumentStatus
 from src.core.errors import (
     AdminLoginRequired,
+    ApprovalRequiredError,
     NotFoundError,
     RateLimitError,
     ValidationError,
@@ -475,6 +476,7 @@ async def documento_detail(
     documento_id: uuid.UUID,
     request: Request,
     rdo_campos: str | None = Query(default=None),
+    rdo_finalizado: str | None = Query(default=None),
     session: AsyncSession = Depends(get_db),
 ) -> Any:
     found = await admin_service.get_documento_com_triagem(session, documento_id)
@@ -490,8 +492,10 @@ async def documento_detail(
             "triagem": triagem,
             "aguardando_aprovacao": doc.status in admin_service.AGUARDANDO_APROVACAO,
             "rdo_editable": is_rdo and doc.status in rdo_service.RDO_EDITABLE_STATUSES,
+            "rdo_finalizable": is_rdo and doc.status == DocumentStatus.APROVADO,
             "rdo_campos": _rdo_campos_form(doc) if is_rdo else {},
             "rdo_campos_sucesso": rdo_campos == "ok",
+            "rdo_finalizado_sucesso": rdo_finalizado == "ok",
         },
     )
 
@@ -531,6 +535,30 @@ async def documento_rdo_campos_submit(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return RedirectResponse(
         f"/admin/documentos/{documento_id}?rdo_campos=ok", status_code=303
+    )
+
+
+@router.post(
+    "/documentos/{documento_id}/finalizar-rdo",
+    dependencies=[Depends(require_admin_session)],
+)
+async def documento_finalizar_rdo(
+    documento_id: uuid.UUID,
+    request: Request,
+    aprovador: str = Form("engenheiro"),
+    session: AsyncSession = Depends(get_db),
+) -> Any:
+    _check_same_origin(request)
+    try:
+        await rdo_service.finalize_rdo(
+            session, documento_id=str(documento_id), aprovador=aprovador
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ApprovalRequiredError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RedirectResponse(
+        f"/admin/documentos/{documento_id}?rdo_finalizado=ok", status_code=303
     )
 
 

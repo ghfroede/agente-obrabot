@@ -11,7 +11,16 @@
   <p><strong>Status:</strong> <span class="badge">{{ documento.status.value }}</span></p>
   <p><strong>Obra:</strong> {{ documento.obra_id }}</p>
   <p><strong>Revisão:</strong> {{ documento.revisao }}</p>
+  <p><strong>Data:</strong> {{ documento.data_ref or "—" }}</p>
+  <p><strong>Bucket:</strong> <code>{{ documento.bucket_uri or "—" }}</code></p>
+  <p><strong>Hash:</strong> <code>{{ documento.hash_sha256 or "—" }}</code></p>
 </div>
+
+{% if rdo_finalizado_sucesso %}
+<div class="card">
+  <p class="sucesso">RDO finalizado e PDF publicado no bucket.</p>
+</div>
+{% endif %}
 
 <div class="card">
   <h2>Triagem</h2>
@@ -54,6 +63,16 @@
     <textarea class="wide-field" id="complementos_engenheiro" name="complementos_engenheiro" rows="4">{{ rdo_campos.complementos_engenheiro }}</textarea>
 
     <p><button type="submit">Salvar complementos</button></p>
+  </form>
+</div>
+{% endif %}
+{% if rdo_finalizable %}
+<div class="card">
+  <h2>Finalização</h2>
+  <form method="post" action="/admin/documentos/{{ documento.id }}/finalizar-rdo">
+    <label for="aprovador_finalizacao">Aprovador</label>
+    <input type="text" id="aprovador_finalizacao" name="aprovador" value="engenheiro" />
+    <p><button type="submit">Finalizar RDO PDF</button></p>
   </form>
 </div>
 {% endif %}

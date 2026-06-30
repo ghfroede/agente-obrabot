@@ -1,6 +1,7 @@
 <div id="aprovacao-panel">
   {% if result.aprovado %}
     <p class="sucesso">Documento aprovado. Status: <span class="badge">{{ result.status }}</span></p>
+    <p><a class="btn" href="/admin/documentos/{{ result.documento_id }}">Abrir documento</a></p>
   {% else %}
     <p class="erro">Documento reprovado. Status: <span class="badge">{{ result.status }}</span></p>
   {% endif %}

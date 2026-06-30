@@ -232,7 +232,7 @@ Pelo painel admin:
 3. Revise entradas, triagens, fotos, áudios, documentos brutos e pendências do dia.
 4. Clique em **Gerar RDO** para criar o rascunho e abrir o detalhe do documento.
 
-O rascunho segue o fluxo normal de validação humana em `/admin/documentos/<documento_id>`. No detalhe do documento, use **Complementos do RDO** para preencher clima, equipe, equipamentos, observações e complementos do engenheiro; ao salvar, o backend atualiza `metadata_json`, regenera o HTML do rascunho e mantém o status em revisão antes da aprovação.
+O rascunho segue o fluxo normal de validação humana em `/admin/documentos/<documento_id>`. No detalhe do documento, use **Complementos do RDO** para preencher clima, equipe, equipamentos, observações e complementos do engenheiro; ao salvar, o backend atualiza `metadata_json`, regenera o HTML do rascunho e mantém o status em revisão antes da aprovação. Depois da aprovação, use **Finalizar RDO PDF** no próprio detalhe para gerar o PDF final, publicar em `05_RDO/finalizados_pdf/` e atualizar o status para `FINALIZADO_VALIDADO`.
 
 Pela API:
 
