@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -56,13 +56,19 @@ def build_entrada_bruta_key(
     slug: str | None = None,
     source: str = "telegram",
     message_id: int | None = None,
+    data_ref: date | None = None,
+    entrada_id: str | None = None,
 ) -> str:
-    now = datetime.now(UTC)
+    ref = data_ref or datetime.now(UTC).date()
     prefix = obra_storage_prefix(obra_id, slug)
-    leaf = f"msg_{message_id}" if message_id is not None else f"evt_{event_id}"
+    leaf = (
+        f"entrada_{entrada_id}"
+        if entrada_id is not None
+        else f"msg_{message_id}" if message_id is not None else f"evt_{event_id}"
+    )
     return (
         f"{prefix}/01_entrada_bruta/{source}/"
-        f"{now.year}/{now.month:02d}/{now.day:02d}/{leaf}/envelope.json"
+        f"{ref.year}/{ref.month:02d}/{ref.day:02d}/{leaf}/envelope.json"
     )
 
 
@@ -70,14 +76,14 @@ def build_triagem_key(obra_id: str, triagem_id: str, *, slug: str | None = None)
     now = datetime.now(UTC)
     prefix = obra_storage_prefix(obra_id, slug)
     return (
-        f"{prefix}/02_triagem/classificacoes/"
+        f"{prefix}/03_triagem/classificacoes/"
         f"{now.year}/{now.month:02d}/{now.day:02d}/triagem_{triagem_id}.json"
     )
 
 
 def build_transcricao_key(obra_id: str, audio_id: str, *, slug: str | None = None) -> str:
     prefix = obra_storage_prefix(obra_id, slug)
-    return f"{prefix}/02_triagem/transcricoes_audio/{audio_id}.json"
+    return f"{prefix}/03_triagem/transcricoes_audio/{audio_id}.json"
 
 
 def build_arquivo_key(
@@ -94,7 +100,7 @@ def build_arquivo_key(
         return f"{prefix}/06_fotos/brutas/{data_ref}/{file_hash[:16]}.{ext.lstrip('.')}"
     now = datetime.now(UTC)
     return (
-        f"{prefix}/02_arquivos/{tipo}/"
+        f"{prefix}/02_midias/{tipo}/"
         f"{now.year}/{now.month:02d}/{file_hash[:16]}.{ext.lstrip('.')}"
     )
 
@@ -203,9 +209,17 @@ def persist_entrada_bruta(
     source: str = "telegram",
     slug: str | None = None,
     message_id: int | None = None,
+    data_ref: date | None = None,
+    entrada_id: str | None = None,
 ) -> tuple[str, str]:
     key = build_entrada_bruta_key(
-        obra_id, event_id, slug=slug, source=source, message_id=message_id
+        obra_id,
+        event_id,
+        slug=slug,
+        source=source,
+        message_id=message_id,
+        data_ref=data_ref,
+        entrada_id=entrada_id,
     )
     envelope = {
         **envelope,

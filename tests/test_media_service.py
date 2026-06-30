@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 
@@ -33,13 +34,18 @@ async def test_ingest_media_photo(monkeypatch: pytest.MonkeyPatch) -> None:
     session = AsyncMock()
     session.add = MagicMock()
     ref = MediaRef(kind=PHOTO, file_id="F1", mime_type="image/jpeg")
+    entrada_id = uuid4()
 
-    summary = await media_service.ingest_media(session, obra_id="OBRA-001", ref=ref, data=b"img")
+    summary = await media_service.ingest_media(
+        session, obra_id="OBRA-001", ref=ref, data=b"img", entrada_id=entrada_id
+    )
 
     assert summary["kind"] == PHOTO
     assert summary["descricao"] == "uma parede de tijolos"
     added = [c.args[0] for c in session.add.call_args_list]
-    assert any(isinstance(o, Arquivo) for o in added)
+    arquivo = next(o for o in added if isinstance(o, Arquivo))
+    assert arquivo.entrada_id == entrada_id
+    assert arquivo.metadata_json["entrada_id"] == str(entrada_id)
     assert any(isinstance(o, Foto) for o in added)
 
 

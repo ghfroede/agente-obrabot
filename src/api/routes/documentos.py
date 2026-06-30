@@ -80,6 +80,7 @@ async def obter_documento(
     return {
         "id": str(doc.id),
         "obra_id": doc.obra_id,
+        "entrada_id": str(doc.entrada_id) if doc.entrada_id else None,
         "tipo": doc.tipo,
         "titulo": doc.titulo,
         "status": doc.status.value,

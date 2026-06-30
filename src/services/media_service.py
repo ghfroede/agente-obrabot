@@ -19,6 +19,7 @@ async def persist_arquivo(
     obra_id: str,
     ref: MediaRef,
     data: bytes,
+    entrada_id: uuid.UUID | None = None,
     telegram_message_id: uuid.UUID | None = None,
     slug: str | None = None,
     data_ref: str | None = None,
@@ -39,6 +40,7 @@ async def persist_arquivo(
     )
     arquivo = Arquivo(
         obra_id=obra_id,
+        entrada_id=entrada_id,
         telegram_message_id=telegram_message_id,
         tipo=ref.kind,
         nome_original=ref.file_name,
@@ -47,7 +49,10 @@ async def persist_arquivo(
         hash_sha256=file_hash,
         bucket_key=key,
         bucket_uri=uri,
-        metadata_json={"file_id": ref.file_id},
+        metadata_json={
+            "file_id": ref.file_id,
+            "entrada_id": str(entrada_id) if entrada_id is not None else None,
+        },
     )
     session.add(arquivo)
     await session.flush()
@@ -60,6 +65,7 @@ async def ingest_media(
     obra_id: str,
     ref: MediaRef,
     data: bytes,
+    entrada_id: uuid.UUID | None = None,
     telegram_message_id: uuid.UUID | None = None,
     data_ref: date | None = None,
     slug: str | None = None,
@@ -79,6 +85,7 @@ async def ingest_media(
         obra_id=obra_id,
         ref=ref,
         data=data,
+        entrada_id=entrada_id,
         telegram_message_id=telegram_message_id,
         slug=slug,
         data_ref=data_ref.isoformat() if data_ref else None,
@@ -98,7 +105,10 @@ async def ingest_media(
             arquivo_id=arquivo.id,
             data_foto=data_ref,
             descricao=descricao,
-            metadata_json={"file_id": ref.file_id},
+            metadata_json={
+                "file_id": ref.file_id,
+                "entrada_id": str(entrada_id) if entrada_id is not None else None,
+            },
         )
         session.add(foto)
         await session.flush()
@@ -116,7 +126,10 @@ async def ingest_media(
             arquivo_id=arquivo.id,
             transcricao=transcricao,
             modelo=modelo,
-            metadata_json={"file_id": ref.file_id},
+            metadata_json={
+                "file_id": ref.file_id,
+                "entrada_id": str(entrada_id) if entrada_id is not None else None,
+            },
         )
         session.add(audio)
         await session.flush()

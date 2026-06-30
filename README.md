@@ -102,7 +102,7 @@ Ingestão unificada: todo canal grava uma `EntradaBruta` e responde rápido (`20
 
 Entradas Telegram sem obra clara ficam com `status=pending_obra` e não geram documento oficial até que uma obra cadastrada seja confirmada.
 
-Documentação detalhada: `docs/railway-deploy-plan.md`, `docs/operations.md` e [`AGENTS.md`](AGENTS.md) (instruções para agentes de IA).
+Documentação detalhada: `docs/railway-deploy-plan.md`, `docs/operations.md`, `docs/storage-taxonomy.md`, `docs/guia-engenheiro.md` e [`AGENTS.md`](AGENTS.md) (instruções para agentes de IA).
 
 ## Roadmap
 

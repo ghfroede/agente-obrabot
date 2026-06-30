@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -46,6 +47,7 @@ async def test_process_media_happy_path(monkeypatch: pytest.MonkeyPatch) -> None
             "telegram": {"photo": [{"file_id": "F1", "file_size": 1}], "date": 1700000000}
         },
         event_id=None,
+        id=uuid.uuid4(),
     )
     session = AsyncMock()
 
@@ -54,7 +56,9 @@ async def test_process_media_happy_path(monkeypatch: pytest.MonkeyPatch) -> None
     assert len(results) == 1
     assert results[0]["descricao"] == "parede"
     entrada_service.telegram_media_service.download_file.assert_awaited_once_with("F1")
-    ingest.assert_awaited_once()
+    _, kwargs = ingest.await_args
+    assert kwargs["entrada_id"] == entrada.id
+    assert kwargs["data_ref"] == date(2023, 11, 14)
 
 
 async def test_process_media_download_failure_degrades(monkeypatch: pytest.MonkeyPatch) -> None:

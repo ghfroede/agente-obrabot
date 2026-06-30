@@ -197,6 +197,18 @@ Invoke-RestMethod `
 
 Essa chamada vincula a entrada à obra e enfileira o processamento assíncrono.
 
+## Estrutura de dados e bucket
+
+O pipeline mantém rastreabilidade explícita entre `EntradaBruta`, `Arquivo`, `Documento` e `Triagem` por `entrada_id`. A migration `008_link_entries_and_operational_metadata` adiciona esses vínculos, além de `data_ref` e `metadata_json` em `entradas_brutas`.
+
+Após deploy do backend que contém essa migration, aplique:
+
+```bash
+railway run --service api uv run alembic upgrade head
+```
+
+A organização do MEGA S4/S3 está documentada em `docs/storage-taxonomy.md`. O guia de uso para o engenheiro está em `docs/guia-engenheiro.md`.
+
 ## Diagnosticar erros comuns
 
 | Sintoma | Causa provável | Ação |

@@ -40,11 +40,13 @@ async def save_triagem(
     *,
     obra_id: str,
     output: TriagemOutput,
+    entrada_id: uuid.UUID | None = None,
     telegram_message_id: uuid.UUID | None = None,
     documento_id: uuid.UUID | None = None,
 ) -> Triagem:
     row = Triagem(
         obra_id=obra_id,
+        entrada_id=entrada_id,
         telegram_message_id=telegram_message_id,
         documento_id=documento_id,
         tipo_documento=output.tipo_documento,

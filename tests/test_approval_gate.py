@@ -15,18 +15,30 @@ from src.services import bucket_service, rdo_service
 
 def test_bucket_taxonomy_keys() -> None:
     entrada = bucket_service.build_entrada_bruta_key(
-        "OBRA-001", "evt-1", slug="obra-teste", message_id=42
+        "OBRA-001",
+        "evt-1",
+        slug="obra-teste",
+        message_id=42,
+        data_ref=date(2026, 6, 27),
+        entrada_id="entrada-1",
     )
-    assert entrada.startswith("obras/OBRA-001-obra-teste/01_entrada_bruta/telegram/")
-    assert "msg_42" in entrada
+    assert entrada == (
+        "obras/OBRA-001-obra-teste/01_entrada_bruta/telegram/"
+        "2026/06/27/entrada_entrada-1/envelope.json"
+    )
 
     triagem = bucket_service.build_triagem_key("OBRA-001", "t1", slug="obra-teste")
-    assert "/02_triagem/classificacoes/" in triagem
+    assert "/03_triagem/classificacoes/" in triagem
 
     foto = bucket_service.build_arquivo_key(
         "OBRA-001", "foto", "a" * 64, "jpg", slug="obra-teste", data_ref="2026-06-27"
     )
     assert foto == "obras/OBRA-001-obra-teste/06_fotos/brutas/2026-06-27/aaaaaaaaaaaaaaaa.jpg"
+
+    audio = bucket_service.build_arquivo_key(
+        "OBRA-001", "audio", "b" * 64, "ogg", slug="obra-teste"
+    )
+    assert "/02_midias/audio/" in audio
 
     rdo_draft = bucket_service.build_rdo_key(
         "OBRA-001", "2026-06-27", "REV00", "rdo.html", slug="obra-teste", draft=True

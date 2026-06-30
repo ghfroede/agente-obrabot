@@ -41,8 +41,10 @@ async def create_entrada_bruta(
     obra_id: str | None,
     text: str,
     raw_payload: dict[str, Any] | None = None,
+    metadata_json: dict[str, Any] | None = None,
     author: str | None = None,
     channel: str = "api",
+    data_ref: date | None = None,
     event_id: str | None = None,
     idempotency_key: str | None = None,
     task_id: uuid.UUID | None = None,
@@ -56,8 +58,10 @@ async def create_entrada_bruta(
         obra_id=obra_id,
         author=author,
         channel=channel,
+        data_ref=data_ref,
         text=text,
         raw_payload=raw_payload,
+        metadata_json=metadata_json,
         hash_sha256=content_hash(source, obra_id or "", text or ""),
         status=status,
         task_id=task_id,
@@ -115,6 +119,8 @@ async def ingest_telegram(
         return {"status": "duplicate", "event_id": payload.event_id, "estado": claim.status}
 
     raw = payload.model_dump(mode="json")
+    telegram_meta = _telegram_entrada_metadata(raw)
+    data_ref = _date_from_telegram(raw.get("telegram", {}))
     msg = TelegramMessage(
         event_id=payload.event_id,
         obra_id=obra.id,
@@ -133,8 +139,10 @@ async def ingest_telegram(
         obra_id=obra.id,
         text=text,
         raw_payload=raw,
+        metadata_json=telegram_meta,
         author=(tg.from_user.username if tg.from_user else None),
         channel="telegram",
+        data_ref=data_ref,
         event_id=payload.event_id,
         idempotency_key=ingestao_service.idempotency_key(payload.event_id, chash, obra.id),
     )
@@ -178,6 +186,8 @@ async def _ingest_telegram_pending_obra(
         return {"status": "duplicate", "event_id": payload.event_id, "estado": claim.status}
 
     raw = payload.model_dump(mode="json")
+    telegram_meta = _telegram_entrada_metadata(raw, requested_obra_id=requested_obra_id)
+    data_ref = _date_from_telegram(raw.get("telegram", {}))
     msg = TelegramMessage(
         event_id=payload.event_id,
         obra_id=None,
@@ -196,8 +206,10 @@ async def _ingest_telegram_pending_obra(
         obra_id=None,
         text=text,
         raw_payload=raw,
+        metadata_json=telegram_meta,
         author=(tg.from_user.username if tg.from_user else None),
         channel="telegram",
+        data_ref=data_ref,
         event_id=payload.event_id,
         idempotency_key=ingestao_service.idempotency_key(
             payload.event_id, chash, PENDING_OBRA_IDEMPOTENCY_SCOPE
@@ -249,6 +261,12 @@ async def resolve_pending_obra(
     entrada.status = "received"
     if isinstance(entrada.raw_payload, dict):
         entrada.raw_payload = {**entrada.raw_payload, "obra_id": obra.id}
+    if isinstance(entrada.metadata_json, dict):
+        entrada.metadata_json = {
+            **entrada.metadata_json,
+            "obra_resolvida_id": obra.id,
+            "obra_resolvida_em": datetime.now(UTC).isoformat(),
+        }
 
     if entrada.event_id:
         result = await session.execute(
@@ -353,6 +371,8 @@ async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, An
         source=entrada.source,
         slug=obra.slug,
         message_id=message_id,
+        data_ref=entrada.data_ref,
+        entrada_id=str(entrada.id),
     )
     entrada.storage_key = bucket_key
     entrada.storage_uri = bucket_uri
@@ -370,6 +390,7 @@ async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, An
     # 4. Documento + Triagem + Auditoria.
     doc = Documento(
         obra_id=obra.id,
+        entrada_id=entrada.id,
         tipo=triagem.tipo_documento,
         titulo=f"{triagem.tipo_documento} — {str(entrada.id)[:8]}",
         revisao="REV00",
@@ -377,15 +398,23 @@ async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, An
         arquivo_id=_primary_arquivo_id(midias),
         metadata_json={
             "entrada_bucket": bucket_uri,
+            "entrada_bucket_key": bucket_key,
+            "entrada_id": str(entrada.id),
             "texto": entrada.text,
             "source": entrada.source,
+            "data_ref": entrada.data_ref.isoformat() if entrada.data_ref else None,
             "midias": midias,
         },
     )
     session.add(doc)
     await session.flush()
     triagem_row = await ingestao_service.save_triagem(
-        session, obra_id=obra.id, output=triagem, documento_id=doc.id
+        session,
+        obra_id=obra.id,
+        output=triagem,
+        entrada_id=entrada.id,
+        telegram_message_id=await _find_telegram_message_id(session, entrada.event_id),
+        documento_id=doc.id,
     )
     bucket_service.persist_triagem_json(
         obra_id=obra.id,
@@ -402,6 +431,7 @@ async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, An
         actor=entrada.author,
         detalhes={
             "source": entrada.source,
+            "entrada_id": str(entrada.id),
             "event_id": entrada.event_id,
             "tipo_documento": triagem.tipo_documento,
             "bucket_key": bucket_key,
@@ -447,6 +477,7 @@ async def _process_media(
                 obra_id=obra_id,
                 ref=ref,
                 data=data,
+                entrada_id=entrada.id,
                 telegram_message_id=tg_msg_id,
                 data_ref=data_ref,
                 slug=slug,
@@ -474,6 +505,48 @@ def _date_from_telegram(telegram: dict[str, Any]) -> date | None:
     if not isinstance(ts, int):
         return None
     return datetime.fromtimestamp(ts, UTC).date()
+
+
+def _telegram_entrada_metadata(
+    raw: dict[str, Any], *, requested_obra_id: str | None = None
+) -> dict[str, Any]:
+    telegram = raw.get("telegram")
+    if not isinstance(telegram, dict):
+        return {}
+
+    chat = telegram.get("chat")
+    chat_meta = chat if isinstance(chat, dict) else {}
+    user = telegram.get("from") or telegram.get("from_user")
+    user_meta = user if isinstance(user, dict) else {}
+    refs = telegram_media_service.extract_media(telegram)
+    metadata: dict[str, Any] = {
+        "canal": "telegram",
+        "chat_id": chat_meta.get("id"),
+        "chat_type": chat_meta.get("type"),
+        "message_id": telegram.get("message_id"),
+        "message_thread_id": telegram.get("message_thread_id"),
+        "telegram_date": telegram.get("date"),
+        "media_count": len(refs),
+        "media": [
+            {
+                "kind": ref.kind,
+                "file_id": ref.file_id,
+                "mime_type": ref.mime_type,
+                "file_name": ref.file_name,
+                "file_size": ref.file_size,
+            }
+            for ref in refs
+        ],
+    }
+    if user_meta:
+        metadata["from_user"] = {
+            "id": user_meta.get("id"),
+            "username": user_meta.get("username"),
+            "first_name": user_meta.get("first_name"),
+        }
+    if requested_obra_id:
+        metadata["obra_id_solicitado"] = requested_obra_id
+    return metadata
 
 
 def _compose_triagem_text(text: str | None, midias: list[dict[str, Any]]) -> str:

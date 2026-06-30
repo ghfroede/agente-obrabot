@@ -103,6 +103,9 @@ class Arquivo(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
+    entrada_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("entradas_brutas.id"), nullable=True, index=True
+    )
     telegram_message_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("telegram_messages.id"), nullable=True
     )
@@ -125,6 +128,9 @@ class Documento(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
+    entrada_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("entradas_brutas.id"), nullable=True, index=True
+    )
     tipo: Mapped[str] = mapped_column(String(64), index=True)
     titulo: Mapped[str] = mapped_column(String(512))
     data_ref: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
@@ -155,6 +161,9 @@ class Triagem(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
+    entrada_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("entradas_brutas.id"), nullable=True, index=True
+    )
     telegram_message_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("telegram_messages.id"), nullable=True
     )
@@ -306,6 +315,7 @@ class EntradaBruta(Base):
     __tablename__ = "entradas_brutas"
     __table_args__ = (
         Index("ix_entradas_brutas_raw_payload_gin", "raw_payload", postgresql_using="gin"),
+        Index("ix_entradas_brutas_metadata_json_gin", "metadata_json", postgresql_using="gin"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -317,8 +327,10 @@ class EntradaBruta(Base):
     )
     author: Mapped[str | None] = mapped_column(String(128), nullable=True)
     channel: Mapped[str] = mapped_column(String(32), nullable=False, default="api")
+    data_ref: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     storage_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     storage_uri: Mapped[str | None] = mapped_column(String(1200), nullable=True)
     hash_sha256: Mapped[str] = mapped_column(String(64), index=True)

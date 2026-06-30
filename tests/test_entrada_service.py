@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -36,6 +37,8 @@ async def test_create_entrada_bruta_defaults_received() -> None:
     assert entrada.source == "api"
     assert entrada.status == "received"
     assert entrada.obra_id == "OBRA-001"
+    assert entrada.data_ref is None
+    assert entrada.metadata_json is None
     assert entrada.hash_sha256 == content_hash("api", "OBRA-001", "executamos alvenaria")
     session.add.assert_called_once()
     session.flush.assert_awaited_once()
@@ -87,7 +90,13 @@ async def test_ingest_telegram_without_obra_creates_pending(
 
     payload = OpenClawTelegramPayload(
         event_id="evt-sem-obra",
-        telegram=TelegramEvent(message_id=1, chat=TelegramChat(id=10), text="sem obra"),
+        telegram=TelegramEvent(
+            message_id=1,
+            chat=TelegramChat(id=10, type="group"),
+            text="sem obra",
+            date=1782529200,
+            photo=[{"file_id": "P1", "file_size": 100}],
+        ),
     )
     session = AsyncMock()
     session.add = MagicMock()
@@ -102,6 +111,12 @@ async def test_ingest_telegram_without_obra_creates_pending(
     assert session.add.call_args_list[0].args[0].obra_id is None
     assert session.add.call_args_list[1].args[0].obra_id is None
     assert session.add.call_args_list[1].args[0].status == entrada_service.PENDING_OBRA_STATUS
+    assert session.add.call_args_list[1].args[0].data_ref == date(2026, 6, 27)
+    metadata = session.add.call_args_list[1].args[0].metadata_json
+    assert metadata["chat_id"] == 10
+    assert metadata["chat_type"] == "group"
+    assert metadata["media_count"] == 1
+    assert metadata["media"][0]["kind"] == "foto"
     enqueue.assert_not_called()
     complete.assert_awaited_once()
 
@@ -150,6 +165,7 @@ async def test_resolve_pending_obra_links_and_enqueues(
         status=entrada_service.PENDING_OBRA_STATUS,
         obra_id=None,
         raw_payload={"event_id": "evt-1"},
+        metadata_json={},
         event_id="evt-1",
     )
     obra = SimpleNamespace(id="OBRA-001")
@@ -174,6 +190,7 @@ async def test_resolve_pending_obra_links_and_enqueues(
     assert entrada.obra_id == "OBRA-001"
     assert entrada.status == "received"
     assert entrada.raw_payload["obra_id"] == "OBRA-001"
+    assert entrada.metadata_json["obra_resolvida_id"] == "OBRA-001"
     assert msg.obra_id == "OBRA-001"
     assert msg.raw_payload["obra_id"] == "OBRA-001"
     session.commit.assert_awaited_once()
