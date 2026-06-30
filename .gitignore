@@ -77,6 +77,9 @@ db.sqlite3-journal
 docs/_build/
 /site
 
+# Graphify (extração de grafo do repositório)
+graphify-out/
+
 # Misc
 *.cover
 .pyre/
