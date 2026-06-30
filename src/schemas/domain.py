@@ -99,6 +99,12 @@ class FotoRelatorioRequest(BaseModel):
     periodo_fim: str
 
 
+class FotoRelatorioApproveFinalizeRequest(BaseModel):
+    documento_id: str
+    aprovador: str = "engenheiro"
+    comentario: str | None = None
+
+
 class OrcamentoImportRequest(BaseModel):
     obra_id: str
     arquivo_id: str | None = None

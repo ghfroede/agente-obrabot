@@ -14,6 +14,9 @@
   <p>Gerado por: {{ generated_by }}</p>
   {% for foto in fotos %}
   <div class="foto">
+    {% if foto.image_data_uri %}
+    <img src="{{ foto.image_data_uri }}" alt="Foto de obra" style="max-width: 100%; height: auto; margin-bottom: 0.5rem;" />
+    {% endif %}
     <p><strong>Data:</strong> {{ foto.data_foto }}</p>
     <p><strong>Descrição:</strong> {{ foto.descricao or '—' }}</p>
     <p><strong>Tags:</strong> {{ foto.tags or [] }}</p>

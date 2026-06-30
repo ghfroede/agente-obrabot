@@ -630,8 +630,11 @@ def _build_reply(entrada: EntradaBruta, result: dict[str, Any]) -> tuple[int, st
     texto = f"✅ Recebido. Tipo: {tipo}. Status: {proximo}. Documento {short_id}."
     if obra_id:
         texto += f"\nPara consolidar o RDO do dia: /gerar_rdo {obra_id} hoje"
+        texto += f"\nPara relatório fotográfico: /gerar_relatorio_foto {obra_id} hoje hoje"
     if tipo == "rdo" and documento_id:
         texto += f"\nApós revisar o rascunho: /aprovar_rdo {documento_id}"
+    if tipo == "relatorio_fotografico" and documento_id:
+        texto += f"\nApós revisar o relatório: /aprovar_relatorio_foto {documento_id}"
     return int(chat["id"]), texto
 
 
