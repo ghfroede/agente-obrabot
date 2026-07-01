@@ -134,11 +134,6 @@ async def test_approve_baseline_persists_metadata(
         "put_bytes",
         lambda key, _body, **_kwargs: f"s3://test/{key}",
     )
-    monkeypatch.setattr(
-        orcamento_service.bucket_service,
-        "build_baseline_key",
-        lambda *_args, **_kwargs: "obras/OBRA-001/07_planejamento/baseline/FINAL.json",
-    )
 
     with patch("src.services.orcamento_service.audit_service.log_event", new_callable=AsyncMock):
         result = await orcamento_service.approve_baseline(

@@ -119,6 +119,18 @@ def build_rdo_key(
     return f"{prefix}/05_RDO/{area}/{data_ref}/{revisao}/{filename}"
 
 
+def build_baseline_key(
+    obra_id: str,
+    data_ref: str,
+    *,
+    slug: str | None = None,
+    final: bool = True,
+) -> str:
+    prefix = obra_storage_prefix(obra_id, slug)
+    suffix = "FINAL" if final else "DRAFT"
+    return f"{prefix}/07_planejamento/baseline/{data_ref}/baseline_{suffix}.json"
+
+
 def build_documento_key(
     obra_id: str,
     tipo: str,
