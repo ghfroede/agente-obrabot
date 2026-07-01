@@ -250,6 +250,16 @@ async def import_orcamento(
     }
 
 
+def _json_safe_metadata(data: dict[str, Any]) -> dict[str, Any]:
+    safe: dict[str, Any] = {}
+    for key, value in data.items():
+        if isinstance(value, date):
+            safe[key] = value.isoformat()
+        else:
+            safe[key] = value
+    return safe
+
+
 async def import_cronograma(
     session: AsyncSession,
     *,
@@ -268,10 +278,13 @@ async def import_cronograma(
             avisos.append(f"Atividade {atv['codigo']}: datas previstas incompletas")
         codigo = atv["codigo"]
         existing = await session.execute(
-            select(CronogramaAtividade).where(
+            select(CronogramaAtividade)
+            .where(
                 CronogramaAtividade.obra_id == obra_id,
                 CronogramaAtividade.codigo == codigo,
             )
+            .order_by(CronogramaAtividade.created_at.desc())
+            .limit(1)
         )
         row = existing.scalar_one_or_none()
         if row is None:
@@ -285,7 +298,7 @@ async def import_cronograma(
         row.inicio_previsto = atv["inicio_previsto"]
         row.fim_previsto = atv["fim_previsto"]
         row.percentual_concluido = atv["percentual_concluido"]
-        row.metadata_json = atv
+        row.metadata_json = _json_safe_metadata(atv)
         count += 1
 
     await audit_service.log_event(

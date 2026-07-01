@@ -80,6 +80,8 @@ async def test_import_cronograma_accepts_field_aliases() -> None:
     assert isinstance(added, CronogramaAtividade)
     assert added.nome == "Fundação"
     assert added.inicio_previsto == date(2026, 6, 1)
+    assert added.metadata_json is not None
+    assert added.metadata_json["inicio_previsto"] == "2026-06-01"
 
 
 @pytest.mark.asyncio
