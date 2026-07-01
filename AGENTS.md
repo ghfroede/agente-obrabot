@@ -142,6 +142,46 @@ graphify update .   # após mudanças de código
 
 Após mudanças em README/AGENTS.md/docs: rode `graphify extract` + `graphify cluster-only` (ver `.cursor/rules/graphify.mdc`).
 
+## Uso obrigatório do Graphify
+
+Antes de analisar arquitetura, implementar funcionalidades ou responder perguntas sobre o código:
+
+1. Nunca usar apenas uma consulta ampla do Graphify.
+2. Fazer no mínimo 3 consultas específicas antes de abrir arquivos manualmente.
+3. Se uma consulta ampla retornar pouco contexto, refinar por domínio.
+4. Usar leitura direta dos arquivos apenas depois que o Graphify indicar os módulos prováveis.
+
+Consultas recomendadas conforme o tipo de tarefa:
+
+- Arquitetura geral:
+  - `graphify query "entry points principais do projeto"`
+  - `graphify query "serviços principais e dependências"`
+  - `graphify query "fluxo principal da aplicação"`
+
+- Bot/Telegram:
+  - `graphify query "bot handlers telegram fluxo mensagens"`
+  - `graphify query "serviços de integração telegram"`
+  - `graphify query "processamento de comandos do usuário"`
+
+- Memória/persistência:
+  - `graphify query "memória persistência banco de dados"`
+  - `graphify query "modelos banco dados repositórios"`
+  - `graphify query "serviços de armazenamento estado usuário"`
+
+- Deploy/configuração:
+  - `graphify query "Railway deploy configuração ambiente"`
+  - `graphify query "variáveis ambiente settings config"`
+  - `graphify query "entry point produção start app"`
+
+Depois de alterar código, executar:
+
+`graphify update .`
+
+Depois de alterar documentação importante, avisar o usuário para rodar:
+
+`graphify extract . --backend openai --model gpt-5-mini`
+`graphify cluster-only .`
+
 ## O que evitar
 
 - Não commitar `.env`, secrets ou `railway.json`
@@ -167,3 +207,16 @@ alembic/           Migrations
 ```
 
 Documentação detalhada: [docs/README.md](docs/README.md).
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
