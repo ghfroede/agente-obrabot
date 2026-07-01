@@ -31,7 +31,7 @@ X-Obrabot-API-Key: ${OBRABOT_API_KEY}
 | Orçamento | `GET/POST /api/v1/orcamento/...` | `orcamento` |
 | Cronograma | `GET/POST /api/v1/cronograma/...` | `cronograma` |
 | Baseline | `POST /api/v1/baseline/validar`, `/aprovar` | `orcamento` |
-| Medições | `POST /api/v1/medicoes` | `medicoes` |
+| Medições | `POST /api/v1/medicoes`, `/fechar` | `medicoes` |
 | Obras | `GET/POST /api/v1/obras` | — |
 | Aprovações | `POST /api/v1/aprovacoes` | `documentos` |
 

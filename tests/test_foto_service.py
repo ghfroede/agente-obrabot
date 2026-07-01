@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, date, datetime
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,7 +10,7 @@ import pytest
 from src.core.constants import DocumentStatus
 from src.core.errors import ValidationError
 from src.db.models import Aprovacao, Documento, Foto, Obra
-from src.services import bucket_service, foto_service
+from src.services import foto_service
 
 
 @pytest.mark.asyncio

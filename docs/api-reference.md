@@ -300,7 +300,27 @@ Publica JSON em `07_planejamento/baseline/` e atualiza `obra.metadata_json.basel
 }
 ```
 
-Vincula a `orcamento_itens` por `codigo` quando existir.
+Registra itens em um `medicao_periodos` mensal (`periodo_ref` no formato `YYYY-MM`) e vincula cada lançamento a `orcamento_itens` por código. O backend aceita aliases compatíveis com OpenClaw, como `periodo`, `codigo_orcamento`, `quantidade` e `valor`.
+
+Validações antes de gravar:
+
+- obra precisa existir;
+- período precisa ser válido e não pode estar fechado;
+- cada item precisa existir no orçamento;
+- quantidade medida não pode ser negativa.
+
+### `POST /api/v1/medicoes/fechar`
+
+```json
+{
+  "obra_id": "OBRA-001",
+  "periodo_ref": "2026-06",
+  "aprovador": "Engenheiro",
+  "comentario": "Medição conferida"
+}
+```
+
+Fecha o período de medição. O fechamento é bloqueado quando o período já está fechado, quando houver item sem orçamento ou quando houver quantidade negativa.
 
 ---
 

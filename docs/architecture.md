@@ -114,6 +114,12 @@ Publicação final no bucket (`04_documentos_finais/`, `05_RDO/finalizados_pdf/`
 
 Atividades podem referenciar itens de orçamento via `codigo_orcamento` no metadata.
 
+## Fluxo medições
+
+1. `POST /api/v1/medicoes` cria ou reutiliza `medicao_periodos` por `obra_id + periodo_ref`
+2. Cada item precisa referenciar `orcamento_itens.codigo` e quantidade não negativa
+3. `POST /api/v1/medicoes/fechar` marca o período como `fechado` somente sem bloqueios
+
 ## Camadas de código
 
 ```

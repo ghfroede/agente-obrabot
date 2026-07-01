@@ -326,6 +326,24 @@ Invoke-RestMethod -Method Post -Uri ".../api/v1/baseline/aprovar" -Headers $head
 
 Listar dados importados: `GET /api/v1/orcamento/{obra_id}`, `GET /api/v1/cronograma/{obra_id}`.
 
+Registrar e fechar medição:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/medicoes" `
+  -Headers $headers `
+  -Body '{"obra_id":"OBRA-001","periodo_ref":"2026-06","itens":[{"codigo_orcamento":"03.02.001","quantidade":5,"valor":5000}]}'
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/medicoes/fechar" `
+  -Headers $headers `
+  -Body '{"obra_id":"OBRA-001","periodo_ref":"2026-06","aprovador":"Engenheiro"}'
+```
+
+Medições exigem orçamento previamente importado. O fechamento é bloqueado quando houver item sem orçamento, quantidade negativa ou período já fechado.
+
 Smoke E2E:
 
 ```bash
@@ -352,7 +370,7 @@ Todos usam `OBRABOT_API_KEY`; OpenClaw smoke usa `OPENCLAW_SHARED_SECRET` via `r
 
 ## Estrutura de dados e bucket
 
-O pipeline mantém rastreabilidade explícita entre `EntradaBruta`, `Arquivo`, `Documento` e `Triagem` por `entrada_id`. A migration `008_operational_links` adiciona esses vínculos, além de `data_ref` e `metadata_json` em `entradas_brutas`. A migration `009_telegram_contextos` adiciona o mapeamento canônico de Telegram para obra.
+O pipeline mantém rastreabilidade explícita entre `EntradaBruta`, `Arquivo`, `Documento` e `Triagem` por `entrada_id`. A migration `008_operational_links` adiciona esses vínculos, além de `data_ref` e `metadata_json` em `entradas_brutas`. A migration `009_telegram_contextos` adiciona o mapeamento canônico de Telegram para obra. A migration `010_medicao_periodos` adiciona períodos formais de medição e vínculo opcional dos lançamentos a esses períodos.
 
 Após deploy do backend que contém essa migration, aplique:
 

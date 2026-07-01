@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Enum,
@@ -32,6 +33,13 @@ class TaskStatus(enum.StrEnum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class MedicaoPeriodoStatus(enum.StrEnum):
+    ABERTO = "aberto"
+    EM_REVISAO = "em_revisao"
+    APROVADO = "aprovado"
+    FECHADO = "fechado"
 
 
 class Base(DeclarativeBase):
@@ -324,6 +332,39 @@ class CronogramaAtividade(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class MedicaoPeriodo(Base):
+    __tablename__ = "medicao_periodos"
+    __table_args__ = (
+        UniqueConstraint("obra_id", "periodo_ref", name="uq_medicao_periodos_obra_periodo"),
+        CheckConstraint(
+            "status IN ('aberto', 'em_revisao', 'aprovado', 'fechado')",
+            name="ck_medicao_periodos_status",
+        ),
+        Index("ix_medicao_periodos_metadata_json_gin", "metadata_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
+    periodo_ref: Mapped[str] = mapped_column(String(32), index=True)
+    status: Mapped[MedicaoPeriodoStatus] = mapped_column(
+        Enum(
+            MedicaoPeriodoStatus,
+            name="medicao_periodo_status",
+            native_enum=False,
+            values_callable=lambda statuses: [status.value for status in statuses],
+        ),
+        default=MedicaoPeriodoStatus.ABERTO,
+        nullable=False,
+        index=True,
+    )
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Medicao(Base):
     __tablename__ = "medicoes"
     __table_args__ = (
@@ -334,6 +375,9 @@ class Medicao(Base):
     obra_id: Mapped[str] = mapped_column(String(32), ForeignKey("obras.id"), index=True)
     orcamento_item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("orcamento_itens.id"), nullable=True
+    )
+    periodo_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("medicao_periodos.id"), nullable=True, index=True
     )
     periodo_ref: Mapped[str] = mapped_column(String(32), index=True)
     quantidade_medida: Mapped[float] = mapped_column(Float, default=0.0)

@@ -90,7 +90,7 @@ async def _load_fotos_with_arquivos(
     if inicio and fim:
         query = query.where(and_(Foto.data_foto >= inicio, Foto.data_foto <= fim))
     result = await session.execute(query.order_by(Foto.data_foto.asc()))
-    return list(result.all())
+    return [(row[0], row[1]) for row in result.all()]
 
 
 def _fotos_to_template_items(

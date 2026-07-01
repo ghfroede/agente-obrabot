@@ -188,7 +188,7 @@ curl https://<api-domain>/health
 - [ ] `GET /tasks/:id` evolui queued → processing → completed
 - [ ] `POST /api/v1/openclaw/telegram-event` (com HMAC válido) retorna `202`
 - [ ] `OPENCLAW_SHARED_SECRET` definido no serviço `api`
-- [ ] Migrations executadas (pre-deploy API, head `009_add_telegram_contextos`)
+- [ ] Migrations executadas (pre-deploy API, head `010_medicao_periodos`)
 - [ ] Worker sem domínio público
 - [ ] API com domínio HTTPS Railway
 - [ ] OpenClaw com domínio HTTPS Railway, porta `8080` e volume `/data`

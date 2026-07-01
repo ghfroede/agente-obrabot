@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class TelegramUser(BaseModel):
@@ -125,3 +125,76 @@ class BaselineApproveRequest(BaseModel):
     obra_id: str
     aprovador: str = "engenheiro"
     comentario: str | None = None
+
+
+class MedicaoItemRequest(BaseModel):
+    codigo_orcamento: str = Field(
+        min_length=1,
+        max_length=64,
+        validation_alias=AliasChoices(
+            "codigo_orcamento",
+            "codigoOrcamento",
+            "codigo_orçamento",
+            "orcamento_codigo",
+            "codigo",
+        ),
+    )
+    quantidade_medida: float = Field(
+        ge=0,
+        validation_alias=AliasChoices(
+            "quantidade_medida",
+            "quantidadeMedida",
+            "quantidade",
+            "qtd",
+            "medido",
+        ),
+    )
+    valor_medido: float | None = Field(
+        default=None,
+        ge=0,
+        validation_alias=AliasChoices("valor_medido", "valorMedido", "valor"),
+    )
+    descricao: str | None = None
+    unidade: str | None = None
+    observacoes: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("observacoes", "observações", "obs"),
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MedicaoRegistroRequest(BaseModel):
+    obra_id: str = Field(
+        min_length=1,
+        max_length=32,
+        validation_alias=AliasChoices("obra_id", "obraId"),
+    )
+    periodo_ref: str = Field(
+        min_length=7,
+        max_length=32,
+        validation_alias=AliasChoices("periodo_ref", "periodoRef", "periodo", "competencia"),
+    )
+    itens: list[MedicaoItemRequest] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("itens", "items"),
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MedicaoPeriodoCloseRequest(BaseModel):
+    obra_id: str = Field(
+        min_length=1,
+        max_length=32,
+        validation_alias=AliasChoices("obra_id", "obraId"),
+    )
+    periodo_ref: str = Field(
+        min_length=7,
+        max_length=32,
+        validation_alias=AliasChoices("periodo_ref", "periodoRef", "periodo", "competencia"),
+    )
+    aprovador: str = "engenheiro"
+    comentario: str | None = None
+
+    model_config = ConfigDict(populate_by_name=True)

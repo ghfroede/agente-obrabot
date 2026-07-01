@@ -9,7 +9,7 @@ Agente de IA para gestão documental de obras de construção civil. O MVP opera
 | Runtime | Python 3.12, [uv](https://docs.astral.sh/uv/) |
 | API | FastAPI, Uvicorn |
 | Worker | RQ + Redis |
-| Banco | PostgreSQL + Alembic (head: `009_add_telegram_contextos`) |
+| Banco | PostgreSQL + Alembic (head: `010_medicao_periodos`) |
 | LLM | OpenAI-compatible (OpenAI, etc.) |
 | PDF | xhtml2pdf (pure Python, compatível com Railway) |
 | Storage | S3-compatible (MEGA S4) — opcional em dev |
@@ -57,7 +57,7 @@ Detalhes: [docs/architecture.md](docs/architecture.md).
 | Orçamento | `GET/POST /api/v1/orcamento/...` |
 | Cronograma | `GET/POST /api/v1/cronograma/...` |
 | Baseline | `POST /api/v1/baseline/validar`, `/aprovar` |
-| Medições | `POST /api/v1/medicoes` |
+| Medições | `POST /api/v1/medicoes`, `/fechar` |
 | Aprovações | `POST /api/v1/aprovacoes` |
 | Documentos | `GET /api/v1/documentos/{id}` |
 
