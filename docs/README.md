@@ -38,7 +38,8 @@ Documentação operacional e técnica do repositório **agente-obrabot**.
 
 | Documento | Conteúdo |
 |-----------|----------|
-| [project-audit-2026-06-29.md](project-audit-2026-06-29.md) | Auditoria pontual (pode estar parcialmente desatualizada) |
+| [plano-de-acao-2026-07-01.md](plano-de-acao-2026-07-01.md) | Auditoria completa + plano de ação priorizado (referência atual) |
+| [project-audit-2026-06-29.md](project-audit-2026-06-29.md) | Auditoria pontual (superada pela de 2026-07-01) |
 | [superpowers/specs/2026-06-29-painel-admin-interno-design.md](superpowers/specs/2026-06-29-painel-admin-interno-design.md) | Design do painel admin |
 
 ## Manutenção da documentação
