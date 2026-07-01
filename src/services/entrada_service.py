@@ -635,6 +635,8 @@ def _build_reply(entrada: EntradaBruta, result: dict[str, Any]) -> tuple[int, st
         texto += f"\nApós revisar o rascunho: /aprovar_rdo {documento_id}"
     if tipo == "relatorio_fotografico" and documento_id:
         texto += f"\nApós revisar o relatório: /aprovar_relatorio_foto {documento_id}"
+    if tipo in ("orcamento", "cronograma") and obra_id:
+        texto += f"\nPara validar baseline: /validar_baseline {obra_id}"
     return int(chat["id"]), texto
 
 

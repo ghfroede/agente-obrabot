@@ -115,3 +115,13 @@ class CronogramaImportRequest(BaseModel):
     obra_id: str
     arquivo_id: str | None = None
     atividades: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class BaselineValidateRequest(BaseModel):
+    obra_id: str
+
+
+class BaselineApproveRequest(BaseModel):
+    obra_id: str
+    aprovador: str = "engenheiro"
+    comentario: str | None = None
