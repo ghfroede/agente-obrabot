@@ -21,6 +21,38 @@ def _parse_csv_ints(value: str) -> list[int]:
     return [int(part.strip()) for part in value.split(",") if part.strip()]
 
 
+_PLACEHOLDER_SECRET_VALUES = frozenset(
+    {
+        "...",
+        "<secret>",
+        "change-me",
+        "change-me-in-production",
+        "changeme",
+        "example",
+        "password",
+        "prod-secret",
+        "secret",
+        "test-secret",
+        "your-secret",
+        "sk-your-key-here",
+    }
+)
+
+_REQUIRED_PRODUCTION_SECRETS = {
+    "OBRABOT_API_KEY": "obrabot_api_key",
+    "OPENCLAW_SHARED_SECRET": "openclaw_shared_secret",
+    "SESSION_SECRET": "session_secret",
+    "ADMIN_PASSWORD": "admin_password",
+}
+
+_OPTIONAL_SECRET_FIELDS = {
+    "OPENAI_API_KEY": "openai_api_key",
+    "TELEGRAM_BOT_TOKEN": "telegram_bot_token",
+    "S3_ACCESS_KEY_ID": "s3_access_key_id",
+    "S3_SECRET_ACCESS_KEY": "s3_secret_access_key",
+}
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -36,8 +68,10 @@ class Settings(BaseSettings):
     port: int = 8000
     cors_origin: str = "*"
     obrabot_api_key: str = ""
+    api_max_body_bytes: int = 10_485_760
     admin_password: str = ""
     session_secret: str = ""
+    admin_login_max_body_bytes: int = 16_384
 
     database_url: str = "postgresql+asyncpg://obrabot:obrabot@localhost:5432/obrabot"
     redis_url: str = "redis://localhost:6379/0"
@@ -78,6 +112,8 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_user_per_minute: int = 30
     rate_limit_chat_per_minute: int = 120
+    rate_limit_protected_per_minute: int = 120
+    rate_limit_expensive_per_minute: int = 20
     rate_limit_window_seconds: int = 60
     admin_login_max_per_minute: int = 5
 
@@ -136,3 +172,43 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def validate_production_secrets(settings: Settings) -> None:
+    if not settings.is_production:
+        return
+
+    missing = [
+        env_name
+        for env_name, field_name in _REQUIRED_PRODUCTION_SECRETS.items()
+        if not str(getattr(settings, field_name)).strip()
+    ]
+    if missing:
+        raise RuntimeError(
+            "Secrets obrigatórios ausentes em produção: " + ", ".join(sorted(missing))
+        )
+
+    unsafe = [
+        env_name
+        for env_name, field_name in (
+            _REQUIRED_PRODUCTION_SECRETS | _OPTIONAL_SECRET_FIELDS
+        ).items()
+        if _is_placeholder_secret(str(getattr(settings, field_name)))
+    ]
+    if unsafe:
+        raise RuntimeError(
+            "Secrets com placeholder inseguro em produção: " + ", ".join(sorted(unsafe))
+        )
+
+
+def _is_placeholder_secret(value: str) -> bool:
+    normalized = value.strip().lower()
+    if not normalized:
+        return False
+    if normalized in _PLACEHOLDER_SECRET_VALUES:
+        return True
+    return (
+        "change-me" in normalized
+        or normalized.startswith("sk-your-")
+        or normalized.startswith("sk-...")
+    )

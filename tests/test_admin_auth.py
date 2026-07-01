@@ -100,21 +100,12 @@ async def test_login_empty_config_in_prod_fails_closed(monkeypatch: pytest.Monke
     monkeypatch.setenv("CORS_ORIGIN", "https://admin.example.com")
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
     monkeypatch.delenv("OBRABOT_API_KEY", raising=False)
-    monkeypatch.setenv("SESSION_SECRET", "session-secret-xyz")
+    monkeypatch.setenv("OPENCLAW_SHARED_SECRET", "prod-openclaw-hmac-for-ci-123456")
+    monkeypatch.setenv("SESSION_SECRET", "prod-session-secret-for-ci-123456")
     monkeypatch.setattr(admin_route.rate_limit_service, "check_admin_login_limit", lambda **_: None)
-    app = create_app()
 
-    async def _fake_db() -> AsyncIterator[AsyncMock]:
-        yield AsyncMock()
-
-    app.dependency_overrides[get_db] = _fake_db
-
-    async with _client(app) as client:
-        response = await client.post(
-            "/admin/login", data={"senha": "qualquer"}, follow_redirects=False
-        )
-
-    assert response.status_code == 500
+    with pytest.raises(RuntimeError, match="ADMIN_PASSWORD"):
+        create_app()
 
 
 async def test_create_app_fails_closed_without_session_secret_in_prod(
@@ -123,8 +114,10 @@ async def test_create_app_fails_closed_without_session_secret_in_prod(
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("NODE_ENV", "production")
     monkeypatch.setenv("CORS_ORIGIN", "https://admin.example.com")
+    monkeypatch.setenv("OPENCLAW_SHARED_SECRET", "prod-openclaw-hmac-for-ci-123456")
+    monkeypatch.setenv("ADMIN_PASSWORD", "prod-admin-password-for-ci-123456")
     monkeypatch.delenv("SESSION_SECRET", raising=False)
     monkeypatch.delenv("OBRABOT_API_KEY", raising=False)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="OBRABOT_API_KEY"):
         create_app()

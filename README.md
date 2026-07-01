@@ -94,6 +94,7 @@ Guia do engenheiro: [docs/guia-engenheiro.md](docs/guia-engenheiro.md).
 | `make test` | pytest (134+ testes) |
 | `make lint` | ruff |
 | `make typecheck` | mypy strict |
+| `make security-audit` | exporta `uv.lock` e roda `uvx pip-audit --strict` |
 | `make smoke-prod-railway` | Smoke integração produção |
 | `make smoke-rdo-railway` | E2E RDO (gerar + aprovar PDF) |
 | `make smoke-foto-railway` | E2E relatório fotográfico |
@@ -112,13 +113,25 @@ Veja [.env.example](.env.example). Obrigatórias em **produção** (serviço `ap
 - `DATABASE_URL`, `REDIS_URL` — injetados pelo Railway
 - `CORS_ORIGIN` — allowlist CSV explícita; `*` é bloqueado em produção
 - `OBRABOT_API_KEY` — header `X-Obrabot-API-Key`
+- `API_MAX_BODY_BYTES` — limite global para bodies JSON/HTTP gerais (default 10 MiB)
+- `ADMIN_LOGIN_MAX_BODY_BYTES` — limite específico do formulário `/admin/login` (default 16 KiB)
 - `OPENCLAW_SHARED_SECRET` + `OPENCLAW_REQUIRE_HMAC=true`
+- `WEBHOOK_MAX_BODY_BYTES` — limite do webhook OpenClaw (default 10 MiB)
 - `ADMIN_PASSWORD` + `SESSION_SECRET` — painel admin (fail-closed)
 - `TELEGRAM_ALLOWED_CHAT_IDS` / `TELEGRAM_ALLOWED_USER_IDS` — allowlist
+- `RATE_LIMIT_PROTECTED_PER_MINUTE` / `RATE_LIMIT_EXPENSIVE_PER_MINUTE` — quotas
+  para rotas autenticadas, com limite menor em rotas caras
 
 No **worker**: `OPENAI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `S3_*` (se bucket ativo).
 
 Em produção, `/docs`, `/redoc` e `/openapi.json` ficam desabilitados.
+O boot também falha se secrets obrigatórios estiverem ausentes ou com placeholders
+conhecidos.
+
+A API também aplica headers de segurança em todas as respostas HTTP:
+`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
+`Permissions-Policy` e CSP compatível com o painel admin. HSTS é emitido apenas
+em produção quando a requisição é HTTPS.
 
 ## Produção (Railway)
 
@@ -152,6 +165,7 @@ Operação: [docs/operations.md](docs/operations.md). Deploy: [docs/railway-depl
 | [docs/architecture.md](docs/architecture.md) | Arquitetura e fluxos |
 | [docs/operations.md](docs/operations.md) | Runbook operacional |
 | [docs/guia-engenheiro.md](docs/guia-engenheiro.md) | Uso no Telegram |
+| [SECURITY.md](SECURITY.md) | Política de segurança e auditoria de dependências |
 | [openclaw/skills/](openclaw/skills/) | Skills OpenClaw por domínio |
 
 ## Licença

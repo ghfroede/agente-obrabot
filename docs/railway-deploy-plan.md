@@ -88,6 +88,10 @@ railway variable set RAILPACK_START_CMD=".venv/bin/python -m src.worker.index" -
 
 `railway.json` fica no `.gitignore` (cópia local para `railway up`); deploys pelo GitHub não o enxergam. Sem config path ou `RAILPACK_START_CMD`, o Railpack falha com *No start command detected* porque o FastAPI está em `src/api/server.py`.
 
+O serviço `api` aplica headers de segurança globalmente. HSTS depende de
+`APP_ENV=production`/`NODE_ENV=production` e de HTTPS no request ou
+`X-Forwarded-Proto: https` vindo do proxy.
+
 ## Build / Start
 
 ```bash
@@ -115,9 +119,16 @@ pip install uv && uv sync --frozen --no-dev
 | `RQ_RETRY_INTERVALS_SECONDS` | api | Não (default `30,120,300`; aplicado no enqueue) |
 | `CORS_ORIGIN` | api | **Sim em produção** (CSV explícito; `*` é bloqueado) |
 | `OBRABOT_API_KEY` | api | **Sim em produção** (rotas públicas não-OpenClaw) |
+| `API_MAX_BODY_BYTES` | api | Não (default `10485760`; limite geral de body HTTP/JSON) |
+| `ADMIN_LOGIN_MAX_BODY_BYTES` | api | Não (default `16384`; limite do formulário `/admin/login`) |
+| `RATE_LIMIT_PROTECTED_PER_MINUTE` | api | Não (default `120`; rotas protegidas leves) |
+| `RATE_LIMIT_EXPENSIVE_PER_MINUTE` | api | Não (default `20`; rotas protegidas caras) |
 | `OPENAI_API_KEY` | worker | Recomendada (heurística sem chave) |
 | `OPENCLAW_SHARED_SECRET` | api | **Sim em produção** (segredo usado para HMAC do webhook) |
 | `OPENCLAW_REQUIRE_HMAC` | api | **Sim em produção** (`true`; `X-OpenClaw-Secret` é legado apenas para dev sem HMAC obrigatório) |
+| `WEBHOOK_MAX_BODY_BYTES` | api | Não (default `10485760`; limite do webhook OpenClaw) |
+| `SESSION_SECRET` | api | **Sim em produção** (cookie assinado do admin) |
+| `ADMIN_PASSWORD` | api | **Sim em produção** (login admin) |
 | `OBRABOT_API_URL` | OpenClaw | Sim (`https://<api-domain>`) |
 | `OPENCLAW_SHARED_SECRET` | OpenClaw | Sim (referência para `api.OPENCLAW_SHARED_SECRET`) |
 | `TELEGRAM_BOT_TOKEN` | OpenClaw | Sim (referência para `worker.TELEGRAM_BOT_TOKEN`) |

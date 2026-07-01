@@ -1,4 +1,4 @@
-.PHONY: dev dev-api dev-worker build start-api start-worker test lint typecheck db-migrate install sync smoke-s3 smoke-api smoke-openclaw smoke-rdo smoke-foto smoke-orcamento smoke-prod smoke-prod-railway
+.PHONY: dev dev-api dev-worker build start-api start-worker test lint typecheck security-audit db-migrate install sync smoke-s3 smoke-api smoke-openclaw smoke-rdo smoke-foto smoke-orcamento smoke-prod smoke-prod-railway
 
 PROD_API_URL ?= https://api-production-8bfb.up.railway.app
 
@@ -33,6 +33,9 @@ lint:
 
 typecheck:
 	$(UV) run mypy src
+
+security-audit:
+	$(UV) run python scripts/audit_dependencies.py
 
 db-migrate:
 	$(UV) run alembic upgrade head

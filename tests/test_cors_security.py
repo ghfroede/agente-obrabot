@@ -17,7 +17,10 @@ def clear_settings_cache() -> None:
 def _set_prod_env(monkeypatch: pytest.MonkeyPatch, *, cors_origin: str) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("NODE_ENV", "production")
-    monkeypatch.setenv("SESSION_SECRET", "prod-session-secret")
+    monkeypatch.setenv("OBRABOT_API_KEY", "prod-api-key-for-ci-123456")
+    monkeypatch.setenv("OPENCLAW_SHARED_SECRET", "prod-openclaw-hmac-for-ci-123456")
+    monkeypatch.setenv("SESSION_SECRET", "prod-session-secret-for-ci-123456")
+    monkeypatch.setenv("ADMIN_PASSWORD", "prod-admin-password-for-ci-123456")
     monkeypatch.setenv("CORS_ORIGIN", cors_origin)
 
 

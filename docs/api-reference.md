@@ -16,6 +16,55 @@ Em produção (`APP_ENV=production`), `/docs` e `/openapi.json` estão desabilit
 
 ---
 
+## Limites de body
+
+A API aplica limite global de tamanho antes do parse de JSON/formulário:
+
+| Escopo | Variável | Default |
+|--------|----------|---------|
+| Rotas HTTP/JSON gerais | `API_MAX_BODY_BYTES` | `10485760` |
+| Login admin `/admin/login` | `ADMIN_LOGIN_MAX_BODY_BYTES` | `16384` |
+| Webhook OpenClaw | `WEBHOOK_MAX_BODY_BYTES` | `10485760` |
+
+Payload acima do limite retorna `413 Payload Too Large` com `{"detail": "Payload excede limite de tamanho"}`.
+
+---
+
+## Headers de segurança
+
+Todas as respostas HTTP recebem:
+
+| Header | Valor |
+|--------|-------|
+| `X-Frame-Options` | `DENY` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
+| `Content-Security-Policy` | `default-src 'self'; ...; frame-ancestors 'none'; object-src 'none'` |
+
+A CSP permite assets locais e inline script/style porque o painel admin atual usa
+HTMX vendorizado, CSS inline e pequenos scripts inline em templates. `Strict-Transport-Security`
+é emitido somente em produção quando a requisição chega como HTTPS ou com
+`X-Forwarded-Proto: https`.
+
+---
+
+## Rate limit
+
+Além do rate limit dedicado do OpenClaw e do login admin, rotas protegidas por
+`X-Obrabot-API-Key` usam quota por fingerprint da chave + IP:
+
+| Escopo | Variável | Default |
+|--------|----------|---------|
+| Rotas protegidas leves | `RATE_LIMIT_PROTECTED_PER_MINUTE` | `120` |
+| Rotas protegidas caras | `RATE_LIMIT_EXPENSIVE_PER_MINUTE` | `20` |
+
+Rotas caras incluem ingestão `/tasks`, triagem, geração/finalização de RDO,
+relatório fotográfico, importações de orçamento/cronograma, baseline e medições.
+Excesso retorna `429` com `{"detail": "Limite de requisições da API excedido"}`.
+
+---
+
 ## Saúde
 
 ### `GET /health`
@@ -380,6 +429,7 @@ Não usa `X-Obrabot-API-Key`. Principais rotas HTML:
 | 401 | API key ausente/incorreta |
 | 403 | Forbidden / allowlist |
 | 404 | Recurso não encontrado |
+| 413 | Payload acima do limite configurado |
 | 429 | Rate limit |
 | 500 | Erro interno (ver logs worker/api) |
 

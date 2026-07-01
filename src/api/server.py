@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from src.api.deps import require_api_key
+from src.api.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from src.api.routes.admin import router as admin_router
 from src.api.routes.documentos import router as documentos_router
 from src.api.routes.entradas import router as entradas_router
@@ -23,7 +24,7 @@ from src.api.routes.orcamento import router as orcamento_router
 from src.api.routes.tasks import router as tasks_router
 from src.api.routes.telegram_contextos import router as telegram_contextos_router
 from src.api.routes.triagem import router as triagem_router
-from src.config.env import get_settings
+from src.config.env import get_settings, validate_production_secrets
 from src.core.errors import (
     AdminLoginRequired,
     ApprovalRequiredError,
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
         cors_origins=settings.cors_origins,
         is_production=settings.is_production,
     )
+    validate_production_secrets(settings)
     app = FastAPI(
         title="Obrabot API",
         version="0.1.0",
@@ -83,6 +85,12 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=_CORS_ALLOW_METHODS,
         allow_headers=_CORS_ALLOW_HEADERS,
+    )
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        default_limit_bytes=settings.api_max_body_bytes,
+        admin_login_limit_bytes=settings.admin_login_max_body_bytes,
+        webhook_limit_bytes=settings.webhook_max_body_bytes,
     )
 
     # Sessão do painel admin (cookie assinado). Chave efetiva resolvida aqui (não como
@@ -100,6 +108,7 @@ def create_app() -> FastAPI:
         https_only=settings.is_production,
         same_site="lax",
     )
+    app.add_middleware(SecurityHeadersMiddleware, hsts_enabled=settings.is_production)
     app.mount("/admin/static", StaticFiles(directory=str(_STATIC_ADMIN)), name="admin-static")
 
     app.include_router(health_router)

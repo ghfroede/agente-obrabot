@@ -101,12 +101,17 @@ Reinicie/redeploy o worker após alterar variáveis.
 # Nunca commitar .env com valores reais
 railway variable set OBRABOT_API_KEY=... --service api
 railway variable set CORS_ORIGIN=https://api-production-8bfb.up.railway.app --service api
+railway variable set API_MAX_BODY_BYTES=10485760 --service api
+railway variable set ADMIN_LOGIN_MAX_BODY_BYTES=16384 --service api
+railway variable set RATE_LIMIT_PROTECTED_PER_MINUTE=120 --service api
+railway variable set RATE_LIMIT_EXPENSIVE_PER_MINUTE=20 --service api
 railway variable set OPENAI_API_KEY=sk-... --service worker
 railway variable set OPENAI_API_KEY=sk-... --service api  # se necessário
 
 # HMAC OpenClaw — OBRIGATÓRIO em produção
 railway variable set OPENCLAW_SHARED_SECRET=... --service api
 railway variable set OPENCLAW_REQUIRE_HMAC=true --service api
+railway variable set WEBHOOK_MAX_BODY_BYTES=10485760 --service api
 
 # OpenClaw deve referenciar o mesmo segredo do api, não duplicar manualmente
 railway variable set OBRABOT_API_URL=https://<api-domain> --service OpenClaw
@@ -126,6 +131,15 @@ railway variable set RQ_RETRY_INTERVALS_SECONDS=30,120,300 --service api
 Referencie `DATABASE_URL` e `REDIS_URL` das variáveis dos serviços Postgres/Redis no dashboard.
 
 Com `APP_ENV=production` ou `NODE_ENV=production`, a API não publica `/docs`, `/redoc` nem `/openapi.json`.
+O boot da API também falha se `OBRABOT_API_KEY`, `OPENCLAW_SHARED_SECRET`,
+`SESSION_SECRET` ou `ADMIN_PASSWORD` estiverem ausentes ou com placeholders
+conhecidos como `change-me-in-production`, `secret`, `password` ou `sk-your-*`.
+
+Em todas as respostas, a API adiciona headers de segurança (`X-Frame-Options`,
+`X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` e CSP). Em
+produção, `Strict-Transport-Security` só é emitido quando a requisição chega como
+HTTPS ou com `X-Forwarded-Proto: https`, que é o caso esperado atrás do proxy do
+Railway.
 
 ## Painel admin interno
 
@@ -146,6 +160,40 @@ Login tem rate-limit por IP (`ADMIN_LOGIN_MAX_PER_MINUTE`, padrão `5`). Para ro
 ```bash
 railway variables --service api --set "ADMIN_PASSWORD=..."
 ```
+
+## Rate limits da API
+
+Rate limits ficam no serviço `api` e usam Redis. As políticas atuais são:
+
+| Escopo | Variáveis | Default |
+|--------|-----------|---------|
+| OpenClaw | `RATE_LIMIT_USER_PER_MINUTE`, `RATE_LIMIT_CHAT_PER_MINUTE` | `30`, `120` |
+| Login admin | `ADMIN_LOGIN_MAX_PER_MINUTE` | `5` |
+| Rotas protegidas leves | `RATE_LIMIT_PROTECTED_PER_MINUTE` | `120` |
+| Rotas protegidas caras | `RATE_LIMIT_EXPENSIVE_PER_MINUTE` | `20` |
+
+Rotas caras incluem `/tasks`, `/api/v1/triagem/classificar`, geração/finalização
+de RDO e relatório fotográfico, importação de orçamento/cronograma, baseline e
+medições. Quando o limite é excedido, a API retorna `429` e registra log com IP,
+rota e fingerprint da API key, nunca a chave bruta.
+
+## Auditoria de dependências
+
+Antes de releases e após mudanças em `pyproject.toml` ou `uv.lock`, rode:
+
+```bash
+make security-audit
+```
+
+Sem `make`:
+
+```bash
+uv run python scripts/audit_dependencies.py
+```
+
+O comando exporta o lockfile sem dependências de desenvolvimento e executa
+`uvx pip-audit --strict`. Resultado diferente de zero deve bloquear deploy até
+triagem do achado.
 
 ## Cadastrar obras iniciais
 
@@ -389,6 +437,8 @@ A organização do MEGA S4/S3 está documentada em `docs/storage-taxonomy.md`. O
 | `/health` 503 redis | `REDIS_URL` incorreta | Referenciar Redis service |
 | Rotas HTTP retornam `401` | `X-Obrabot-API-Key` ausente/incorreto | Enviar header com `OBRABOT_API_KEY`; `/health` e OpenClaw não usam esse header |
 | Rotas HTTP retornam `500` com `OBRABOT_API_KEY` | Variável ausente na `api` | Definir `OBRABOT_API_KEY` no serviço `api` |
+| Rotas HTTP retornam `413` | Body maior que `API_MAX_BODY_BYTES`, `ADMIN_LOGIN_MAX_BODY_BYTES` ou `WEBHOOK_MAX_BODY_BYTES` | Reduzir payload ou ajustar o limite no serviço `api` |
+| Rotas HTTP retornam `429` | Rate limit excedido | Ver logs da API; ajustar quota se for uso legítimo |
 | Task / `EntradaBruta` stuck em `queued`/`received` | Worker offline | Logs worker, verificar Redis |
 | OpenClaw responde `202` mas nada acontece | Worker offline / fila parada | Ver `EntradaBruta.status` no banco + logs worker |
 | Task `failed` ou `EntradaBruta.status=failed` | LLM timeout ou S3 error | Ver `error` em `GET /tasks/:id` / logs worker |

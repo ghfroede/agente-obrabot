@@ -17,6 +17,7 @@ Documentação operacional e técnica do repositório **agente-obrabot**.
 | [operations.md](operations.md) | Runbook: local, Railway, secrets, smoke, troubleshooting |
 | [railway-deploy-plan.md](railway-deploy-plan.md) | Arquitetura Railway, serviços, variáveis |
 | [guia-engenheiro.md](guia-engenheiro.md) | Como usar o bot no Telegram |
+| [../SECURITY.md](../SECURITY.md) | Política de segurança, reporte e auditoria de dependências |
 
 ## Técnico
 

@@ -3,8 +3,10 @@ from __future__ import annotations
 import httpx
 import pytest
 
+from src.api import deps as api_deps
 from src.api.server import create_app
 from src.config.env import get_settings
+from src.core.errors import RateLimitError
 
 
 @pytest.fixture(autouse=True)
@@ -29,8 +31,10 @@ async def test_health_does_not_require_api_key(monkeypatch: pytest.MonkeyPatch) 
 async def test_fastapi_docs_are_disabled_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("CORS_ORIGIN", "https://admin.example.com")
-    monkeypatch.setenv("OBRABOT_API_KEY", "test-secret")
-    monkeypatch.setenv("SESSION_SECRET", "prod-session-secret")
+    monkeypatch.setenv("OBRABOT_API_KEY", "prod-api-key-for-ci-123456")
+    monkeypatch.setenv("OPENCLAW_SHARED_SECRET", "prod-openclaw-hmac-for-ci-123456")
+    monkeypatch.setenv("SESSION_SECRET", "prod-session-secret-for-ci-123456")
+    monkeypatch.setenv("ADMIN_PASSWORD", "prod-admin-password-for-ci-123456")
     app = create_app()
     transport = httpx.ASGITransport(app=app)
 
@@ -76,6 +80,7 @@ async def test_protected_route_requires_api_key(monkeypatch: pytest.MonkeyPatch)
 async def test_protected_route_accepts_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OBRABOT_API_KEY", "test-secret")
     monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
     app = create_app()
     transport = httpx.ASGITransport(app=app)
 
@@ -88,3 +93,28 @@ async def test_protected_route_accepts_api_key(monkeypatch: pytest.MonkeyPatch) 
 
     assert response.status_code == 200
     assert response.json()["tipo_documento"] == "rdo"
+
+
+async def test_protected_route_rate_limit_returns_429(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_rate_limit(**_kwargs: object) -> None:
+        raise RateLimitError("Limite de requisições da API excedido")
+
+    monkeypatch.setenv("OBRABOT_API_KEY", "test-secret")
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setattr(
+        api_deps.rate_limit_service,
+        "check_protected_route_limit",
+        _raise_rate_limit,
+    )
+    app = create_app()
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/triagem/classificar",
+            headers={"X-Obrabot-API-Key": "test-secret"},
+            json={"texto": "Gerar RDO de hoje"},
+        )
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == "Limite de requisições da API excedido"
