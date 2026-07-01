@@ -110,6 +110,7 @@ railway run --service api uv run python scripts/smoke_orcamento.py
 Veja [.env.example](.env.example). Obrigatórias em **produção** (serviço `api`):
 
 - `DATABASE_URL`, `REDIS_URL` — injetados pelo Railway
+- `CORS_ORIGIN` — allowlist CSV explícita; `*` é bloqueado em produção
 - `OBRABOT_API_KEY` — header `X-Obrabot-API-Key`
 - `OPENCLAW_SHARED_SECRET` + `OPENCLAW_REQUIRE_HMAC=true`
 - `ADMIN_PASSWORD` + `SESSION_SECRET` — painel admin (fail-closed)

@@ -36,6 +36,17 @@ from src.core.errors import (
 
 # server.py em src/api/server.py → parent = src/api ; parent.parent = src/.
 _STATIC_ADMIN = Path(__file__).resolve().parent.parent / "static" / "admin"
+_CORS_ALLOW_METHODS = ["GET", "POST", "OPTIONS"]
+_CORS_ALLOW_HEADERS = [
+    "Content-Type",
+    "X-Obrabot-API-Key",
+    "X-OpenClaw-Signature",
+    "X-OpenClaw-Timestamp",
+    "X-OpenClaw-Event-Id",
+    "X-OpenClaw-Secret",
+    "X-Timestamp",
+    "X-Event-Id",
+]
 
 
 @asynccontextmanager
@@ -43,9 +54,21 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
+def _resolve_cors_origins(*, cors_origins: list[str], is_production: bool) -> list[str]:
+    if is_production and (not cors_origins or "*" in cors_origins):
+        raise RuntimeError(
+            "CORS_ORIGIN deve ser uma allowlist explícita em produção; wildcard é proibido"
+        )
+    return cors_origins
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     docs_enabled = not settings.is_production
+    cors_origins = _resolve_cors_origins(
+        cors_origins=settings.cors_origins,
+        is_production=settings.is_production,
+    )
     app = FastAPI(
         title="Obrabot API",
         version="0.1.0",
@@ -56,10 +79,10 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[settings.cors_origin] if settings.cors_origin != "*" else ["*"],
+        allow_origins=cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=_CORS_ALLOW_METHODS,
+        allow_headers=_CORS_ALLOW_HEADERS,
     )
 
     # Sessão do painel admin (cookie assinado). Chave efetiva resolvida aqui (não como

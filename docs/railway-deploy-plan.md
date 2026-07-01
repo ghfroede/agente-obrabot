@@ -113,6 +113,7 @@ pip install uv && uv sync --frozen --no-dev
 | `RQ_JOB_TIMEOUT_SECONDS` | api | Não (default `900`; aplicado no enqueue) |
 | `RQ_RETRY_MAX` | api | Não (default `3`; aplicado no enqueue) |
 | `RQ_RETRY_INTERVALS_SECONDS` | api | Não (default `30,120,300`; aplicado no enqueue) |
+| `CORS_ORIGIN` | api | **Sim em produção** (CSV explícito; `*` é bloqueado) |
 | `OBRABOT_API_KEY` | api | **Sim em produção** (rotas públicas não-OpenClaw) |
 | `OPENAI_API_KEY` | worker | Recomendada (heurística sem chave) |
 | `OPENCLAW_SHARED_SECRET` | api | **Sim em produção** (segredo usado para HMAC do webhook) |

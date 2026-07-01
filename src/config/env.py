@@ -9,6 +9,12 @@ def _parse_csv_ids(value: str) -> frozenset[str]:
     return frozenset(part.strip() for part in value.split(",") if part.strip())
 
 
+def _parse_csv_values(value: str) -> list[str]:
+    if not value.strip():
+        return []
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
 def _parse_csv_ints(value: str) -> list[int]:
     if not value.strip():
         return []
@@ -106,6 +112,10 @@ class Settings(BaseSettings):
     @property
     def allowed_thread_ids(self) -> frozenset[str]:
         return _parse_csv_ids(self.telegram_allowed_thread_ids)
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return _parse_csv_values(self.cors_origin)
 
     @property
     def sync_database_url(self) -> str:

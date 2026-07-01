@@ -97,6 +97,7 @@ async def test_login_wrong_password_rerenders_200(monkeypatch: pytest.MonkeyPatc
 async def test_login_empty_config_in_prod_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("NODE_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGIN", "https://admin.example.com")
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
     monkeypatch.delenv("OBRABOT_API_KEY", raising=False)
     monkeypatch.setenv("SESSION_SECRET", "session-secret-xyz")
@@ -121,6 +122,7 @@ async def test_create_app_fails_closed_without_session_secret_in_prod(
 ) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("NODE_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGIN", "https://admin.example.com")
     monkeypatch.delenv("SESSION_SECRET", raising=False)
     monkeypatch.delenv("OBRABOT_API_KEY", raising=False)
 

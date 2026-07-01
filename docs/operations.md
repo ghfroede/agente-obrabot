@@ -100,6 +100,7 @@ Reinicie/redeploy o worker após alterar variáveis.
 ```bash
 # Nunca commitar .env com valores reais
 railway variable set OBRABOT_API_KEY=... --service api
+railway variable set CORS_ORIGIN=https://api-production-8bfb.up.railway.app --service api
 railway variable set OPENAI_API_KEY=sk-... --service worker
 railway variable set OPENAI_API_KEY=sk-... --service api  # se necessário
 

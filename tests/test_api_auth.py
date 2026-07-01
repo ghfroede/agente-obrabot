@@ -28,6 +28,7 @@ async def test_health_does_not_require_api_key(monkeypatch: pytest.MonkeyPatch) 
 
 async def test_fastapi_docs_are_disabled_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGIN", "https://admin.example.com")
     monkeypatch.setenv("OBRABOT_API_KEY", "test-secret")
     monkeypatch.setenv("SESSION_SECRET", "prod-session-secret")
     app = create_app()
