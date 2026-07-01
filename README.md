@@ -1,6 +1,6 @@
 # Obrabot — Construtora AgentOS
 
-Agente de IA para gestão documental de obras de construção civil. MVP focado em **triagem automática**, **persistência auditável** e **orquestração CEO** para entradas de engenheiros (texto via API e **Telegram via OpenClaw** — integração ativa/experimental, autenticada por HMAC).
+Agente de IA para gestão documental de obras de construção civil. O MVP operacional cobre **ingestão unificada** (API + Telegram/OpenClaw), **triagem automática**, **RDO com aprovação humana**, **relatório fotográfico**, **orçamento/cronograma com baseline validado**, **painel admin** e **persistência auditável** no PostgreSQL + bucket S3-compatible.
 
 ## Stack
 
@@ -9,115 +9,149 @@ Agente de IA para gestão documental de obras de construção civil. MVP focado 
 | Runtime | Python 3.12, [uv](https://docs.astral.sh/uv/) |
 | API | FastAPI, Uvicorn |
 | Worker | RQ + Redis |
-| Banco | PostgreSQL + Alembic |
+| Banco | PostgreSQL + Alembic (head: `009_add_telegram_contextos`) |
 | LLM | OpenAI-compatible (OpenAI, etc.) |
-| Storage | S3-compatible (MEGA S4) — opcional |
+| PDF | xhtml2pdf (pure Python, compatível com Railway) |
+| Storage | S3-compatible (MEGA S4) — opcional em dev |
+| Deploy | Railway (`api`, `worker`, `OpenClaw`, Postgres, Redis) |
 
 ## Início rápido
 
 ```bash
-# 1. Dependências (uv)
 uv sync
 cp .env.example .env
-
-# 2. Infra local
 docker compose up -d
-
-# 3. Migrations
 make db-migrate
-
-# 4. API (terminal 1)
-make dev-api
-
-# 5. Worker (terminal 2)
-make dev-worker
+make dev-api    # terminal 1
+make dev-worker # terminal 2
 ```
 
-## Endpoints
+API em `http://localhost:8000`. Healthcheck: `GET /health`.
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| GET | `/health` | Healthcheck (app, Postgres, Redis) |
-| POST | `/tasks` | Cria tarefa de triagem |
-| GET | `/tasks/:id` | Consulta status/resultado |
-| POST | `/api/v1/openclaw/telegram-event` | Ingestão Telegram via OpenClaw (HMAC + idempotência) |
-| GET/POST | `/api/v1/obras` | Lista/cadastra obras reais |
-| GET/POST | `/api/v1/telegram-contextos` | Mapeia chat/tópico Telegram para obra |
-| POST | `/api/v1/entradas/:id/resolver-obra` | Resolve entrada Telegram pendente de obra |
-| POST | `/api/v1/rdo/gerar` | Gera rascunho de RDO a partir das evidências do dia |
-| POST | `/api/v1/rdo/aprovar-finalizar` | Aprova RDO com validação humana explícita e publica PDF final |
-| GET | `/admin` | Painel admin interno (login em `/admin/login`, auth por sessão) |
-| GET | `/admin/dia-obra` | Consolida evidências por obra/data e gera rascunho de RDO pelo painel |
+## Arquitetura (resumo)
 
-### Exemplo
-
-```bash
-curl -X POST http://localhost:8000/tasks \
-  -H "Content-Type: application/json" \
-  -H "X-Obrabot-API-Key: $OBRABOT_API_KEY" \
-  -d '{"input":{"message":"Hoje executamos alvenaria no pav 2","obra_id":"OBRA-001","author":"Engenheiro 01"}}'
-
-curl -H "X-Obrabot-API-Key: $OBRABOT_API_KEY" http://localhost:8000/tasks/<taskId>
+```
+Cliente HTTP / Telegram (OpenClaw)
+        ↓
+   API (FastAPI) → EntradaBruta → Redis (fila obrabot) → Worker
+        ↓                              ↓
+   PostgreSQL                    raw S3 → mídia → triagem IA
+        ↓                              ↓
+   Painel /admin              Documento / Triagem / Auditoria
 ```
 
-## Scripts
+Detalhes: [docs/architecture.md](docs/architecture.md).
+
+## API pública (`X-Obrabot-API-Key`)
+
+| Área | Rotas principais |
+|------|------------------|
+| Saúde | `GET /health` |
+| Tarefas | `POST /tasks`, `GET /tasks/{id}` |
+| OpenClaw | `POST /api/v1/openclaw/telegram-event` (HMAC, sem API key) |
+| Obras | `GET/POST /api/v1/obras` |
+| Telegram | `GET/POST /api/v1/telegram-contextos` |
+| Entradas | `POST /api/v1/entradas/{id}/resolver-obra` |
+| RDO | `POST /api/v1/rdo/gerar`, `/aprovar-finalizar`, `/finalizar` |
+| Fotos | `POST /api/v1/fotos/relatorio`, `/relatorio/aprovar-finalizar` |
+| Orçamento | `GET/POST /api/v1/orcamento/...` |
+| Cronograma | `GET/POST /api/v1/cronograma/...` |
+| Baseline | `POST /api/v1/baseline/validar`, `/aprovar` |
+| Medições | `POST /api/v1/medicoes` |
+| Aprovações | `POST /api/v1/aprovacoes` |
+| Documentos | `GET /api/v1/documentos/{id}` |
+
+Referência completa: [docs/api-reference.md](docs/api-reference.md).
+
+## Painel admin
+
+| Rota | Descrição |
+|------|-----------|
+| `GET /admin/login` | Login (sessão assinada) |
+| `GET /admin` | Dashboard |
+| `GET /admin/dia-obra` | Consolidação do dia + gerar RDO |
+| `GET /admin/obras`, `/entradas`, `/documentos` | CRUD e revisão operacional |
+
+Auth por cookie (`SESSION_SECRET` + `ADMIN_PASSWORD`). Não usa `X-Obrabot-API-Key`.
+
+## Comandos Telegram (OpenClaw)
+
+| Comando | Ação |
+|---------|------|
+| `/gerar_rdo {obra} hoje` | Rascunho RDO do dia |
+| `/aprovar_rdo {documento_id}` | Aprova + PDF final |
+| `/gerar_relatorio_foto {obra} {início} {fim}` | Relatório fotográfico |
+| `/aprovar_relatorio_foto {documento_id}` | Aprova + PDF final |
+| `/validar_baseline {obra}` | Valida orçamento + cronograma |
+| `/aprovar_baseline {obra}` | Publica baseline no bucket |
+
+Guia do engenheiro: [docs/guia-engenheiro.md](docs/guia-engenheiro.md).
+
+## Scripts e smoke tests
 
 | Comando | Descrição |
 |---------|-----------|
-| `uv sync` | Instala dependências (dev incluído) |
-| `make dev-api` | API com reload |
-| `make dev-worker` | Worker RQ |
-| `make test` | pytest |
+| `make test` | pytest (134+ testes) |
 | `make lint` | ruff |
-| `make typecheck` | mypy |
-| `make db-migrate` | Alembic upgrade head |
-| `make start-api` | Produção (usa `$PORT`) |
-| `make start-worker` | Worker produção |
+| `make typecheck` | mypy strict |
+| `make smoke-prod-railway` | Smoke integração produção |
+| `make smoke-rdo-railway` | E2E RDO (gerar + aprovar PDF) |
+| `make smoke-foto-railway` | E2E relatório fotográfico |
+| `make smoke-orcamento-railway` | E2E orçamento + cronograma + baseline |
+
+No PowerShell (sem `make`):
+
+```powershell
+railway run --service api uv run python scripts/smoke_orcamento.py
+```
 
 ## Variáveis de ambiente
 
-Veja `.env.example`. Obrigatórias em produção:
+Veja [.env.example](.env.example). Obrigatórias em **produção** (serviço `api`):
 
-- `DATABASE_URL` — PostgreSQL (Railway injeta automaticamente)
-- `REDIS_URL` — Redis (Railway injeta automaticamente)
-- `OBRABOT_API_KEY` — exigida no header `X-Obrabot-API-Key` para rotas HTTP públicas, exceto `/health` e OpenClaw
-- `OPENCLAW_SHARED_SECRET` + `OPENCLAW_REQUIRE_HMAC=true` — assinatura HMAC do webhook OpenClaw
-- `OPENAI_API_KEY` — para triagem via LLM (sem chave, usa heurística)
-- `ADMIN_PASSWORD` + `SESSION_SECRET` — exigidas pelo serviço `api` para o painel `/admin` (ausência derruba a `api` em produção — fail-closed)
+- `DATABASE_URL`, `REDIS_URL` — injetados pelo Railway
+- `OBRABOT_API_KEY` — header `X-Obrabot-API-Key`
+- `OPENCLAW_SHARED_SECRET` + `OPENCLAW_REQUIRE_HMAC=true`
+- `ADMIN_PASSWORD` + `SESSION_SECRET` — painel admin (fail-closed)
+- `TELEGRAM_ALLOWED_CHAT_IDS` / `TELEGRAM_ALLOWED_USER_IDS` — allowlist
+
+No **worker**: `OPENAI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `S3_*` (se bucket ativo).
 
 Em produção, `/docs`, `/redoc` e `/openapi.json` ficam desabilitados.
 
-Opcionais:
+## Produção (Railway)
 
-- `S3_*` — persistência bruta no bucket MEGA S4
-- `AGENT_SYSTEM_PROMPT`, `OPENAI_MODEL`, `LLM_BASE_URL`
+| Serviço | URL / notas |
+|---------|-------------|
+| API | `https://api-production-8bfb.up.railway.app` |
+| OpenClaw | gateway Telegram com HMAC → API |
+| Obra smoke | `OBRA-SMOKE` |
 
-## Arquitetura Railway
+Operação: [docs/operations.md](docs/operations.md). Deploy: [docs/railway-deploy-plan.md](docs/railway-deploy-plan.md). Bucket: [docs/storage-taxonomy.md](docs/storage-taxonomy.md).
 
-```
-Cliente HTTP / Telegram (OpenClaw) → API (público) → EntradaBruta → Redis → Worker (privado)
-                                          ↓                                       ↓
-                                     PostgreSQL                          raw S3 → triagem IA
-                                          ↓                                       ↓
-                                     MEGA S4 (opcional)            Documento/Triagem/Auditoria
-```
+## Roadmap (estado atual)
 
-Ingestão unificada: todo canal grava uma `EntradaBruta` e responde rápido (`202`); o worker faz storage + triagem fora do request. Detalhes em [AGENTS.md](AGENTS.md) e `dev/plan-2.md`.
+| MVP | Escopo | Status |
+|-----|--------|--------|
+| 1 | Ingestão unificada, triagem, OpenClaw HMAC | ✅ |
+| 2 | RDO com aprovação Telegram + PDF | ✅ |
+| 3 | Relatório fotográfico com aprovação | ✅ |
+| 4 | Orçamento + cronograma + baseline validado | ✅ |
+| 5 | Medições e gestão de obra | ⏳ backlog |
+| 6 | OpenAI Agents SDK multiagente | ⏳ backlog |
 
-Entradas Telegram sem obra clara ficam com `status=pending_obra` e não geram documento oficial até que uma obra cadastrada seja confirmada. Depois do processamento, o painel `/admin/dia-obra` permite revisar o dia operacional da obra e gerar o rascunho do RDO a partir das evidências persistidas; o detalhe do documento permite complementar clima, equipe, equipamentos e observações antes da aprovação humana e finalizar o PDF validado no bucket. Para operação conversacional, o OpenClaw pode usar `/aprovar_rdo <documento_id>` chamando `/api/v1/rdo/aprovar-finalizar`, que registra a aprovação explícita e publica o PDF final em uma única chamada.
+## Documentação
 
-Documentação detalhada: `docs/railway-deploy-plan.md`, `docs/operations.md`, `docs/storage-taxonomy.md`, `docs/guia-engenheiro.md` e [`AGENTS.md`](AGENTS.md) (instruções para agentes de IA).
-
-## Roadmap
-
-Estabilização e evolução em `dev/plan-2.md`:
-
-- ✅ **Sprint 1** — main estável: HMAC com `event_id`, idempotência atômica, ordem S3-antes-da-IA, testes
-- ✅ **Sprint 2** — ingestão unificada (`EntradaBruta`); `/tasks` e OpenClaw no mesmo fluxo (202 + fila RQ)
-- ✅ **Sprint 3** — Telegram real: texto, foto e áudio (worker baixa mídia → `Arquivo`/`Foto`/`AudioTranscricao` + visão/transcrição; resposta de status opt-in)
-- ⏳ **Sprint 4** — RDO operacional com aprovação humana
-- ⏳ **Sprint 5** — relatório fotográfico
-- ⏳ **Sprint 6** — orçamento, cronograma e medição
+| Documento | Conteúdo |
+|-----------|----------|
+| [AGENTS.md](AGENTS.md) | Instruções para agentes de IA no repositório |
+| [CLAUDE.md](CLAUDE.md) | Guia técnico conciso (Claude Code) |
+| [docs/README.md](docs/README.md) | Índice da documentação |
+| [docs/api-reference.md](docs/api-reference.md) | Referência HTTP completa |
+| [docs/architecture.md](docs/architecture.md) | Arquitetura e fluxos |
+| [docs/operations.md](docs/operations.md) | Runbook operacional |
+| [docs/guia-engenheiro.md](docs/guia-engenheiro.md) | Uso no Telegram |
+| [openclaw/skills/](openclaw/skills/) | Skills OpenClaw por domínio |
 
 ## Licença
 

@@ -11,23 +11,37 @@ Use esta skill como base para todas as chamadas HTTP ao backend Obrabot.
 
 - `OBRABOT_API_URL`: URL base da API, sem barra final.
 - `OBRABOT_API_KEY`: chave para rotas protegidas.
-- `OPENCLAW_SHARED_SECRET`: segredo usado apenas no webhook HMAC `/api/v1/openclaw/telegram-event`.
+- `OPENCLAW_SHARED_SECRET`: segredo do webhook HMAC `/api/v1/openclaw/telegram-event`.
 
 ## Headers
 
-Rotas protegidas, exceto `/health` e `/api/v1/openclaw/telegram-event`, exigem:
+Rotas protegidas (exceto `/health` e OpenClaw):
 
 ```http
 Content-Type: application/json
 X-Obrabot-API-Key: ${OBRABOT_API_KEY}
 ```
 
-O webhook OpenClaw usa HMAC próprio e não usa `X-Obrabot-API-Key`.
+## Índice de rotas por domínio
+
+| Domínio | Rotas | Skill |
+|---------|-------|-------|
+| RDO | `POST /api/v1/rdo/gerar`, `/aprovar-finalizar` | `rdo` |
+| Fotos | `POST /api/v1/fotos/relatorio`, `/aprovar-finalizar` | `fotos` |
+| Orçamento | `GET/POST /api/v1/orcamento/...` | `orcamento` |
+| Cronograma | `GET/POST /api/v1/cronograma/...` | `cronograma` |
+| Baseline | `POST /api/v1/baseline/validar`, `/aprovar` | `orcamento` |
+| Medições | `POST /api/v1/medicoes` | `medicoes` |
+| Obras | `GET/POST /api/v1/obras` | — |
+| Aprovações | `POST /api/v1/aprovacoes` | `documentos` |
+
+Referência completa: repositório `docs/api-reference.md`.
 
 ## Regras
 
-- Nunca exponha valores de segredo em resposta ao usuário.
-- Não chame banco, Redis, bucket S3 ou Railway diretamente em fluxo operacional.
-- Se a API retornar `401`, pare e reporte "chave da API ausente/inválida".
-- Se a API retornar `404`, reporte o recurso ausente sem criar dados por conta própria.
-- Se a API retornar `202`, informe que o processamento ficou assíncrono.
+- Nunca exponha segredos na resposta ao usuário.
+- Não acesse banco, Redis, bucket ou Railway diretamente.
+- `401` → chave API ausente/inválida.
+- `404` → recurso ausente; não invente dados.
+- `202` → processamento assíncrono (ingestão).
+- Documentos finais (PDF) só após aprovação humana explícita.

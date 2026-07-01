@@ -5,38 +5,48 @@ alwaysApply: true
 
 # Obrabot — regras centrais
 
-Projeto Python FastAPI + RQ worker para triagem documental de obras.
+Projeto Python FastAPI + RQ worker para gestão documental de obras (MVP operacional).
 
-## Fluxo principal (ingestão unificada — Sprint 2)
+## Fluxo principal (ingestão unificada)
 
 Todo canal grava `EntradaBruta` (status `received`) ANTES da IA e enfileira `process_entrada`:
 
-- `POST /tasks` → `Task` (queued) + `EntradaBruta(source=api, task_id)` → fila RQ → `202`
+- `POST /tasks` → `Task` + `EntradaBruta(source=api)` → fila RQ → `202`
 - `POST /api/v1/openclaw/telegram-event` → HMAC + idempotência → `EntradaBruta(source=openclaw)` → `202`
-- Worker `process_entrada` → `run_entrada_pipeline`: raw S3 → triagem → Documento/Triagem/Auditoria; espelha status na `Task`
+- Worker `process_entrada` → `run_entrada_pipeline`: raw S3 → mídia → triagem → Documento/Triagem/Auditoria
 
-`run_ceo_pipeline`/`process_task` são legado. Núcleo: `src/services/entrada_service.py`.
+Núcleo: `src/services/entrada_service.py`.
 
-Painel admin `/admin` (`src/api/routes/admin.py`): server-rendered, auth por sessão (`SessionMiddleware`, **não** `require_api_key`); guard `require_admin_session` interrompe via `raise AdminLoginRequired`. Leituras em `src/services/admin_service.py`; mutações reusam `obra_service`/`entrada_service`/`approval_service`.
+## Fluxos documentais (síncronos na API)
+
+- **RDO**: `rdo/gerar` → `rdo/aprovar-finalizar` → PDF (`rdo_service.py`)
+- **Relatório fotográfico**: `fotos/relatorio` → `aprovar-finalizar` → PDF (`foto_service.py`)
+- **Baseline**: `orcamento/importar` + `cronograma/importar` → `baseline/validar` → `baseline/aprovar` (`orcamento_service.py`)
+
+PDF final exige aprovação humana. Ver `docs/api-reference.md`.
+
+## Painel admin
+
+`/admin` (`src/api/routes/admin.py`): server-rendered, auth por sessão. Dia-obra + complementos RDO + finalizar PDF.
 
 ## Onde editar
 
-- Núcleo de ingestão: `src/services/entrada_service.py`
-- Rotas HTTP: `src/api/routes/`
-- Serviços de negócio: `src/services/`
-- Jobs/fila: `src/worker/`
-- Models/migrations: `src/db/`, `alembic/`
-- Config: `src/config/env.py`, `.env.example`
+- Ingestão: `src/services/entrada_service.py`
+- Rotas: `src/api/routes/`
+- Negócio: `src/services/`
+- Worker: `src/worker/`
+- Models: `src/db/`, `alembic/` (head: `009_add_telegram_contextos`)
+- Docs: `docs/` — manter sincronizado com mudanças de API
 
 ## Princípios
 
-- Diff mínimo; siga padrões existentes (Pydantic v2, SQLAlchemy 2.0 async na API).
-- Use `uv run` / `make` — não pip global.
-- Secrets via env; nunca commitar credenciais.
-- Escopo MVP 1 apenas, salvo pedido explícito (ver `dev/plan-1.md`).
-- Respostas ao usuário em português.
+- Diff mínimo; padrões existentes (Pydantic v2, SQLAlchemy 2.0 async na API)
+- `uv run` / `make` (ou `uv run python scripts/...` no PowerShell)
+- Secrets via env; nunca commitar credenciais
+- Respostas ao usuário em português
+- Graphify: `graphify query` antes de explorar; `graphify update .` após código
 
-## Verificação antes de entregar
+## Verificação
 
 ```bash
 make lint && make typecheck && make test

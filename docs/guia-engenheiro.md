@@ -22,7 +22,7 @@ Também funciona enviar o código junto da foto, áudio ou documento:
 OBRA-001: foto da concretagem da laje do bloco B.
 ```
 
-Se o sistema responder pedindo a obra, responda com o ID cadastrado, por exemplo:
+Se o sistema responder pedindo a obra, responda com o ID cadastrado:
 
 ```text
 OBRA-001
@@ -47,9 +47,7 @@ OBRA-001: hoje executamos alvenaria no pavimento 2, eixo B-C. Equipe com 4 pedre
 
 ## Fotos
 
-Envie a foto com legenda. A legenda deve explicar o que aparece e onde foi registrado.
-
-Exemplo:
+Envie a foto com legenda explicando o que aparece e onde foi registrado.
 
 ```text
 OBRA-001: fachada norte, execução de reboco no 3º pavimento.
@@ -57,16 +55,16 @@ OBRA-001: fachada norte, execução de reboco no 3º pavimento.
 
 Boas práticas:
 
-- fotografe com iluminação suficiente;
-- inclua referência visual de local quando possível;
-- evite enviar várias situações diferentes na mesma foto;
+- iluminação suficiente;
+- referência visual de local quando possível;
+- evite várias situações diferentes na mesma foto;
 - não envie imagem sem legenda quando o local não for óbvio.
+
+As fotos são classificadas automaticamente (descrição por IA) e entram no relatório fotográfico do período.
 
 ## Áudios
 
-Áudios são aceitos e serão transcritos. Prefira áudios curtos, com obra e assunto no começo.
-
-Exemplo:
+Áudios são transcritos. Prefira áudios curtos, com obra e assunto no começo.
 
 ```text
 OBRA-001, registro do dia: concretagem concluída no bloco A, mas a bomba atrasou duas horas.
@@ -74,51 +72,89 @@ OBRA-001, registro do dia: concretagem concluída no bloco A, mas a bomba atraso
 
 ## Documentos
 
-Documentos recebidos pelo Telegram são armazenados como arquivo bruto. OCR/importação estruturada ainda é fase futura, então descreva no texto o que o documento representa.
-
-Exemplo:
+Documentos recebidos pelo Telegram são armazenados como arquivo bruto. Descreva no texto o que o documento representa.
 
 ```text
 OBRA-001: estou enviando a nota de entrega do aço recebido hoje.
 ```
 
-## RDO pelo Telegram
+## RDO (Relatório Diário de Obra)
 
-Depois que as entradas do dia forem enviadas e processadas, peça o rascunho do RDO:
+Depois que as entradas do dia forem enviadas e processadas:
 
 ```text
 /gerar_rdo OBRA-001 hoje
 ```
 
-O sistema deve responder com o `documento_id` do rascunho. Revise o documento antes de aprovar. Quando estiver correto, aprove de forma explícita:
+O sistema responde com o `documento_id` do rascunho. Revise antes de aprovar:
 
 ```text
 /aprovar_rdo <documento_id>
 ```
 
-Esse comando registra a aprovação humana e finaliza o PDF no bucket. Para reprovar, informe o motivo:
+Para reprovar:
 
 ```text
 /reprovar_rdo <documento_id> faltou registrar a equipe de elétrica
 ```
 
+O PDF final só é publicado após aprovação explícita.
+
+## Relatório fotográfico
+
+Para consolidar fotos de um período:
+
+```text
+/gerar_relatorio_foto OBRA-001 2026-06-01 2026-06-15
+```
+
+Para o dia atual:
+
+```text
+/gerar_relatorio_foto OBRA-001 hoje hoje
+```
+
+Após revisar o rascunho:
+
+```text
+/aprovar_relatorio_foto <documento_id>
+```
+
+## Orçamento e cronograma (baseline)
+
+Importação de orçamento e cronograma é feita pela equipe de planejamento (planilha validada → API). No Telegram você pode acompanhar:
+
+```text
+/validar_baseline OBRA-001
+```
+
+Quando estiver correto e com aprovação explícita:
+
+```text
+/aprovar_baseline OBRA-001
+```
+
+O baseline aprovado passa a aparecer no contexto do RDO do dia.
+
 ## O que evitar
 
-- Enviar informação de obra sem indicar a obra quando houver mais de uma obra ativa.
+- Enviar informação sem indicar a obra quando houver mais de uma obra ativa.
 - Misturar assuntos de obras diferentes na mesma mensagem.
-- Pedir geração de documento final sem aprovação humana.
+- Pedir documento final sem aprovação humana.
 - Enviar dados pessoais ou financeiros fora do escopo da obra.
 
 ## Estados possíveis
 
 | Estado | Significado |
 |--------|-------------|
-| `pending_obra` | A obra precisa ser confirmada antes do processamento oficial |
+| `pending_obra` | Obra precisa ser confirmada |
 | `queued` | Entrada aceita e enfileirada |
-| `processing` | Worker está processando |
-| `completed` | Triagem concluída e documento/registro criado |
-| `failed` | Falha técnica; operação deve verificar logs/API |
+| `processing` | Worker processando |
+| `completed` | Triagem concluída |
+| `failed` | Falha técnica — acionar operação |
 
 ## Regra de aprovação
 
-RDO, relatório fotográfico e documentos finais só devem ser publicados depois de aprovação humana. Antes disso, o sistema trabalha com entrada bruta, triagem e rascunhos.
+RDO, relatório fotográfico e documentos finais só são publicados no bucket depois de **aprovação humana explícita**. Antes disso, o sistema trabalha com entrada bruta, triagem e rascunhos.
+
+Mais detalhes: [operations.md](operations.md), [api-reference.md](api-reference.md).

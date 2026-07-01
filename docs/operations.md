@@ -260,6 +260,96 @@ Invoke-RestMethod `
 
 Essa chamada cria o registro de aprovação, gera o PDF final, publica em `05_RDO/finalizados_pdf/` e retorna `status=FINALIZADO_VALIDADO`. Se a aprovação já tiver sido registrada por outro caminho, use `POST /api/v1/rdo/finalizar`.
 
+Smoke E2E RDO:
+
+```bash
+railway run --service api uv run python scripts/smoke_rdo.py
+# ou: make smoke-rdo-railway
+```
+
+## Relatório fotográfico
+
+Pela API:
+
+```powershell
+# Gerar rascunho
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/fotos/relatorio" `
+  -Headers $headers `
+  -Body '{"obra_id":"OBRA-001","periodo_inicio":"2026-06-01","periodo_fim":"2026-06-15"}'
+
+# Aprovar e publicar PDF
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/fotos/relatorio/aprovar-finalizar" `
+  -Headers $headers `
+  -Body '{"documento_id":"<uuid>","aprovador":"Engenheiro"}'
+```
+
+No Telegram: `/gerar_relatorio_foto OBRA-001 hoje hoje` e `/aprovar_relatorio_foto <documento_id>`.
+
+Smoke E2E:
+
+```bash
+railway run --service api uv run python scripts/smoke_foto.py
+```
+
+## Orçamento, cronograma e baseline
+
+Importar orçamento:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/orcamento/importar" `
+  -Headers $headers `
+  -Body '{"obra_id":"OBRA-001","itens":[{"codigo":"03.02.001","descricao":"Concretagem","unidade":"m3","quantidade":10,"valor_unitario":1000}]}'
+```
+
+Importar cronograma (aceita `inicio_planejado`/`fim_planejado`):
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://api-production-8bfb.up.railway.app/api/v1/cronograma/importar" `
+  -Headers $headers `
+  -Body '{"obra_id":"OBRA-001","atividades":[{"codigo":"ATV-001","nome":"Estrutura","inicio_planejado":"2026-06-01","fim_planejado":"2026-06-30","codigo_orcamento":"03.02.001"}]}'
+```
+
+Validar e aprovar baseline:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri ".../api/v1/baseline/validar" -Headers $headers -Body '{"obra_id":"OBRA-001"}'
+Invoke-RestMethod -Method Post -Uri ".../api/v1/baseline/aprovar" -Headers $headers -Body '{"obra_id":"OBRA-001","aprovador":"Engenheiro"}'
+```
+
+Listar dados importados: `GET /api/v1/orcamento/{obra_id}`, `GET /api/v1/cronograma/{obra_id}`.
+
+Smoke E2E:
+
+```bash
+railway run --service api uv run python scripts/smoke_orcamento.py
+```
+
+No PowerShell (sem `make`):
+
+```powershell
+railway run --service api uv run python scripts/smoke_orcamento.py
+```
+
+## Smoke tests (resumo)
+
+| Script | Valida |
+|--------|--------|
+| `scripts/smoke_prod.py` | Health + OpenClaw + worker |
+| `scripts/smoke_openclaw.py` | Webhook HMAC |
+| `scripts/smoke_rdo.py` | RDO gerar + aprovar PDF |
+| `scripts/smoke_foto.py` | Relatório fotográfico E2E |
+| `scripts/smoke_orcamento.py` | Orçamento + cronograma + baseline |
+
+Todos usam `OBRABOT_API_KEY`; OpenClaw smoke usa `OPENCLAW_SHARED_SECRET` via `railway run --service api`.
+
 ## Estrutura de dados e bucket
 
 O pipeline mantém rastreabilidade explícita entre `EntradaBruta`, `Arquivo`, `Documento` e `Triagem` por `entrada_id`. A migration `008_operational_links` adiciona esses vínculos, além de `data_ref` e `metadata_json` em `entradas_brutas`. A migration `009_telegram_contextos` adiciona o mapeamento canônico de Telegram para obra.

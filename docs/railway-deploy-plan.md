@@ -188,22 +188,40 @@ curl https://<api-domain>/health
 - [ ] `GET /tasks/:id` evolui queued → processing → completed
 - [ ] `POST /api/v1/openclaw/telegram-event` (com HMAC válido) retorna `202`
 - [ ] `OPENCLAW_SHARED_SECRET` definido no serviço `api`
-- [ ] Migrations executadas (pre-deploy API)
+- [ ] Migrations executadas (pre-deploy API, head `009_add_telegram_contextos`)
 - [ ] Worker sem domínio público
 - [ ] API com domínio HTTPS Railway
 - [ ] OpenClaw com domínio HTTPS Railway, porta `8080` e volume `/data`
 - [ ] OpenClaw `/setup` protegido por `SETUP_PASSWORD` (401 sem credencial)
 - [ ] OpenClaw não possui variáveis `DATABASE_URL`, `REDIS_URL` nem `S3_*`
 - [ ] Secrets não aparecem nos logs
+- [ ] Smoke E2E: `railway run --service api uv run python scripts/smoke_prod.py`
+- [ ] Smoke RDO: `scripts/smoke_rdo.py`
+- [ ] Smoke foto: `scripts/smoke_foto.py`
+- [ ] Smoke orçamento: `scripts/smoke_orcamento.py`
+
+## Estado do MVP (2026-07)
+
+| Entrega | Status |
+|---------|--------|
+| Ingestão unificada + OpenClaw HMAC | ✅ Produção |
+| Mídia Telegram (foto/áudio) | ✅ Worker |
+| Painel admin `/admin` | ✅ Sessão |
+| RDO gerar + aprovar PDF | ✅ E2E smoke |
+| Relatório fotográfico + PDF | ✅ E2E smoke |
+| Orçamento + cronograma + baseline | ✅ E2E smoke |
+| Medições (API básica) | ⏳ Parcial |
+| Multiagente OpenAI Agents SDK | ⏳ Backlog |
 
 ## Limitações conhecidas
 
-- OpenClaw/Telegram **ativo** para texto e mídia (foto/áudio/documento; download no worker — Sprint 3). O serviço OpenClaw precisa ter o setup inicial concluído em `/setup`. Resposta de status ao engenheiro é opt-in (`TELEGRAM_REPLY_ENABLED`)
-- HMAC é obrigatório em produção; `X-OpenClaw-Secret` é aceito apenas como legado em desenvolvimento sem HMAC obrigatório
+- OpenClaw/Telegram **ativo** para texto e mídia. Setup inicial em `/setup`. Reply ao engenheiro é opt-in (`TELEGRAM_REPLY_ENABLED=false` por padrão)
+- HMAC obrigatório em produção (`OPENCLAW_REQUIRE_HMAC=true`)
 - Triagem heurística quando `OPENAI_API_KEY` ausente
-- S3 opcional — sem credenciais, entrada bruta vai ao bucket local (`.local-bucket`)
-- PDF/RDO/aprovação humana: Sprint 4+
+- S3 opcional — dev usa `.local-bucket/`
+- OCR de documentos Telegram: fase futura
 - pgvector/RAG: futuro
+- `make` não disponível no PowerShell Windows — use `uv run python scripts/...` ou `railway run`
 
 ## Referências Railway consultadas
 
