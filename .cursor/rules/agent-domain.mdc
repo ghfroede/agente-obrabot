@@ -16,12 +16,7 @@ Roda no worker (`process_entrada`), fora do request:
 4. Cria `Documento` (TRIADO) + `Triagem` + `AuditoriaEvento`.
 5. Marca `completed`/`failed`; espelha status na `Task` ligada (se houver).
 
-## Pipeline CEO (`run_ceo_pipeline` — legado, job `process_task`)
-
-1. Validar `message` obrigatório.
-2. `persist_raw_entry` (se S3 configurado) ANTES de classificar.
-3. `classify_entry` → JSON com `tipo_documento`, `obra_id`, `pendencias`, `delegar_para`.
-4. Retornar delegação e `proximo_passo` (esclarecimento vs especialista).
+O pipeline CEO legado (`run_ceo_pipeline` / `process_task`) foi removido em P2.1.
 
 ## Triagem
 

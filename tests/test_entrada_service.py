@@ -256,7 +256,7 @@ def test_enqueue_entrada_uses_configured_timeout_and_retry(
             captured["args"] = args
             captured["kwargs"] = kwargs
 
-    monkeypatch.setattr(entrada_service.Redis, "from_url", lambda _url: "redis-conn")
+    monkeypatch.setattr(entrada_service, "get_redis", lambda: "redis-conn")
     monkeypatch.setattr(entrada_service, "Queue", FakeQueue)
     monkeypatch.setattr(
         entrada_service,

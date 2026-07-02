@@ -7,21 +7,13 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.errors import NotFoundError, ValidationError
+from src.core.errors import ValidationError
 from src.db.models import CronogramaAtividade, Obra, OrcamentoItem
 from src.services import audit_service, bucket_service
+from src.services import common as service_common
 from src.utils.dates import parse_date, today_iso, utc_now
 
 BASELINE_META_KEY = "baseline"
-
-
-async def _get_obra(session: AsyncSession, obra_id: str) -> Obra:
-    obra = await session.get(Obra, obra_id)
-    if obra is None:
-        raise NotFoundError(f"Obra {obra_id} não encontrada")
-    return obra
-
-
 def _normalize_orcamento_item(item: dict[str, Any], *, index: int) -> dict[str, Any]:
     codigo = str(item.get("codigo") or f"ITEM-{index + 1}").strip()
     if not codigo:
@@ -106,7 +98,7 @@ def _cronograma_atividade_to_dict(row: CronogramaAtividade) -> dict[str, Any]:
 
 
 async def list_orcamento(session: AsyncSession, *, obra_id: str) -> dict[str, Any]:
-    await _get_obra(session, obra_id)
+    await service_common.get_obra(session, obra_id)
     result = await session.execute(
         select(OrcamentoItem)
         .where(OrcamentoItem.obra_id == obra_id)
@@ -117,7 +109,7 @@ async def list_orcamento(session: AsyncSession, *, obra_id: str) -> dict[str, An
 
 
 async def list_cronograma(session: AsyncSession, *, obra_id: str) -> dict[str, Any]:
-    await _get_obra(session, obra_id)
+    await service_common.get_obra(session, obra_id)
     result = await session.execute(
         select(CronogramaAtividade)
         .where(CronogramaAtividade.obra_id == obra_id)
@@ -128,7 +120,7 @@ async def list_cronograma(session: AsyncSession, *, obra_id: str) -> dict[str, A
 
 
 async def validate_baseline(session: AsyncSession, *, obra_id: str) -> dict[str, Any]:
-    obra = await _get_obra(session, obra_id)
+    obra = await service_common.get_obra(session, obra_id)
     orc_result = await session.execute(
         select(func.count()).select_from(OrcamentoItem).where(OrcamentoItem.obra_id == obra_id)
     )
@@ -198,7 +190,7 @@ async def import_orcamento(
     obra_id: str,
     itens: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    obra = await _get_obra(session, obra_id)
+    obra = await service_common.get_obra(session, obra_id)
     if not itens:
         raise ValidationError("Lista de itens vazia")
 
@@ -266,7 +258,7 @@ async def import_cronograma(
     obra_id: str,
     atividades: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    obra = await _get_obra(session, obra_id)
+    obra = await service_common.get_obra(session, obra_id)
     if not atividades:
         raise ValidationError("Lista de atividades vazia")
 
@@ -351,7 +343,7 @@ async def approve_baseline(
             "Baseline não está pronto: " + "; ".join(validacao["bloqueios"])
         )
 
-    obra = await _get_obra(session, obra_id)
+    obra = await service_common.get_obra(session, obra_id)
     orcamento = (await list_orcamento(session, obra_id=obra_id))["itens"]
     cronograma = (await list_cronograma(session, obra_id=obra_id))["atividades"]
     snapshot = _build_baseline_snapshot(

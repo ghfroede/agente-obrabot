@@ -42,7 +42,7 @@ def _client(app: object) -> httpx.AsyncClient:
 @pytest.mark.parametrize(
     ("method", "path"),
     [
-        ("GET", "/admin"),
+        ("GET", "/admin/"),
         ("GET", "/admin/entradas"),
         ("GET", "/admin/obras"),
         ("GET", "/admin/documentos/00000000-0000-0000-0000-000000000001"),

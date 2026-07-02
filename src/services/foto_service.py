@@ -1,49 +1,22 @@
 from __future__ import annotations
 
 import base64
-import uuid
 from datetime import date
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config.env import get_settings
 from src.core.constants import GENERATED_BY, SCHEMA_VERSION, DocumentStatus
-from src.core.errors import ApprovalRequiredError, NotFoundError, ValidationError
-from src.db.models import Aprovacao, Arquivo, Documento, Foto, Obra
+from src.core.errors import ValidationError
+from src.db.models import Aprovacao, Arquivo, Documento, Foto
 from src.services import audit_service, bucket_service, pdf_service
+from src.services import common as service_common
 from src.utils.dates import parse_date, utc_now
 from src.utils.filenames import build_photo_report_filename, next_revision
 from src.utils.hashing import sha256_hex
 
 PHOTO_REPORT_TYPE = "relatorio_fotografico"
-
-
-def _jinja_env() -> Environment:
-    settings = get_settings()
-    return Environment(
-        loader=FileSystemLoader(settings.templates_dir),
-        autoescape=select_autoescape(["html", "xml"]),
-    )
-
-
-async def _get_obra(session: AsyncSession, obra_id: str) -> Obra:
-    result = await session.execute(select(Obra).where(Obra.id == obra_id))
-    obra = result.scalar_one_or_none()
-    if obra is None:
-        raise NotFoundError(f"Obra {obra_id} não encontrada")
-    return obra
-
-
-async def _get_documento(session: AsyncSession, documento_id: str | uuid.UUID) -> Documento:
-    doc_id = documento_id if isinstance(documento_id, uuid.UUID) else uuid.UUID(str(documento_id))
-    result = await session.execute(select(Documento).where(Documento.id == doc_id))
-    doc = result.scalar_one_or_none()
-    if doc is None:
-        raise NotFoundError(f"Documento {documento_id} não encontrado")
-    return doc
 
 
 def _require_photo_report_document(doc: Documento) -> None:
@@ -52,20 +25,7 @@ def _require_photo_report_document(doc: Documento) -> None:
 
 
 async def _require_approval(session: AsyncSession, doc: Documento) -> Aprovacao:
-    if doc.status != DocumentStatus.APROVADO:
-        raise ApprovalRequiredError(
-            f"Documento deve estar APROVADO para finalizar (atual: {doc.status.value})"
-        )
-    result = await session.execute(
-        select(Aprovacao)
-        .where(Aprovacao.documento_id == doc.id, Aprovacao.aprovado.is_(True))
-        .order_by(Aprovacao.created_at.desc())
-        .limit(1)
-    )
-    approval = result.scalar_one_or_none()
-    if approval is None:
-        raise ApprovalRequiredError("Nenhuma aprovação humana registrada para este documento")
-    return approval
+    return await service_common.require_approval(session, doc)
 
 
 def _period_from_metadata(metadata: dict[str, Any] | None) -> tuple[str, str]:
@@ -126,7 +86,7 @@ def _render_photo_report_html(
     revisao: str,
     fotos: list[dict[str, Any]],
 ) -> str:
-    env = _jinja_env()
+    env = service_common.jinja_env()
     template = env.get_template("relatorio_fotografico.html")
     return template.render(
         obra_id=obra_id,
@@ -219,7 +179,7 @@ async def _finalize_approved_photo_report(
     aprovador: str,
     commit: bool,
 ) -> dict[str, Any]:
-    obra = await _get_obra(session, doc.obra_id)
+    obra = await service_common.get_obra(session, doc.obra_id)
     periodo_inicio, periodo_fim = _period_from_metadata(doc.metadata_json)
     if not periodo_inicio or not periodo_fim:
         raise ValidationError("Relatório sem período no metadata_json")
@@ -305,7 +265,7 @@ async def finalize_photo_report(
     documento_id: str,
     aprovador: str,
 ) -> dict[str, Any]:
-    doc = await _get_documento(session, documento_id)
+    doc = await service_common.get_documento(session, documento_id)
     _require_photo_report_document(doc)
     approval = await _require_approval(session, doc)
     return await _finalize_approved_photo_report(
@@ -324,7 +284,7 @@ async def approve_and_finalize_photo_report(
     aprovador: str,
     comentario: str | None = None,
 ) -> dict[str, Any]:
-    doc = await _get_documento(session, documento_id)
+    doc = await service_common.get_documento(session, documento_id)
     _require_photo_report_document(doc)
     if doc.status == DocumentStatus.FINALIZADO_VALIDADO:
         raise ValidationError("Relatório fotográfico já finalizado")

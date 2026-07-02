@@ -6,7 +6,7 @@ Agente de IA para gestão documental de obras de construção civil. O MVP opera
 
 | Camada | Tecnologia |
 |--------|------------|
-| Runtime | Python 3.12, [uv](https://docs.astral.sh/uv/) |
+| Runtime | Python 3.12+ (ver `.python-version`), [uv](https://docs.astral.sh/uv/) |
 | API | FastAPI, Uvicorn |
 | Worker | RQ + Redis |
 | Banco | PostgreSQL + Alembic (head: `010_medicao_periodos`) |
@@ -52,7 +52,7 @@ Detalhes: [docs/architecture.md](docs/architecture.md).
 | Obras | `GET/POST /api/v1/obras` |
 | Telegram | `GET/POST /api/v1/telegram-contextos` |
 | Entradas | `POST /api/v1/entradas/{id}/resolver-obra` |
-| RDO | `POST /api/v1/rdo/gerar`, `/aprovar-finalizar`, `/finalizar` |
+| RDO | `POST /api/v1/rdo/rascunho`, `/gerar`, `/aprovar-finalizar`, `/finalizar` |
 | Fotos | `POST /api/v1/fotos/relatorio`, `/relatorio/aprovar-finalizar` |
 | Orçamento | `GET/POST /api/v1/orcamento/...` |
 | Cronograma | `GET/POST /api/v1/cronograma/...` |
@@ -91,7 +91,7 @@ Guia do engenheiro: [docs/guia-engenheiro.md](docs/guia-engenheiro.md).
 
 | Comando | Descrição |
 |---------|-----------|
-| `make test` | pytest (134+ testes) |
+| `make test` | pytest (~210 testes unitários; integração via `pytest -m integration`) |
 | `make lint` | ruff |
 | `make typecheck` | mypy strict |
 | `make security-audit` | exporta `uv.lock` e roda `uvx pip-audit --strict` |

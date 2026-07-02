@@ -23,3 +23,5 @@ FINAL_PUBLISH_STATUSES = frozenset({DocumentStatus.APROVADO, DocumentStatus.FINA
 
 SCHEMA_VERSION = "1.0"
 GENERATED_BY = "backend-construtora-agentos"
+PENDING_OBRA_STATUS = "pending_obra"
+PENDING_OBRA_IDEMPOTENCY_SCOPE = "__PENDING_OBRA__"

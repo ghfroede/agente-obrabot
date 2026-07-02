@@ -1,12 +1,27 @@
 import hmac
+import logging
 from collections.abc import AsyncGenerator
 
-from fastapi import Depends, Header, HTTPException, Request, status
+from fastapi import Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.env import get_settings
 from src.db.client import get_async_session
 from src.services import rate_limit_service
+
+logger = logging.getLogger(__name__)
+
+_CONFIG_ERROR_DETAIL = "Configuração do servidor incompleta"
+
+
+def client_ip(request: Request) -> str:
+    """IP do cliente; atrás de proxy (Railway) usa o primeiro hop de X-Forwarded-For."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return "desconhecido"
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -21,23 +36,19 @@ async def require_api_key(
     settings = get_settings()
     expected = settings.obrabot_api_key
     if not expected:
+        logger.error("OBRABOT_API_KEY ausente para rotas protegidas")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OBRABOT_API_KEY obrigatório para rotas protegidas",
+            detail=_CONFIG_ERROR_DETAIL,
         )
     if x_obrabot_api_key is None or not hmac.compare_digest(x_obrabot_api_key, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key inválida ou ausente",
         )
-    client_ip = request.client.host if request.client else "desconhecido"
     rate_limit_service.check_protected_route_limit(
         api_key=x_obrabot_api_key,
-        ip=client_ip,
+        ip=client_ip(request),
         method=request.method,
         path=request.url.path,
     )
-
-
-DbSession = Depends(get_db)
-ApiKeyDep = Depends(require_api_key)

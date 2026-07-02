@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.client import get_async_session
+from src.api.deps import get_db
 from src.db.models import Obra, Task, TaskStatus
 from src.services import entrada_service
 
@@ -48,7 +48,7 @@ class TaskDetailResponse(BaseModel):
 @router.post("", response_model=TaskResponse, status_code=202)
 async def create_task(
     body: CreateTaskRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_db),
 ) -> TaskResponse:
     inp = body.input
     obra_id = (inp.obra_id or "").strip().upper()
@@ -87,7 +87,7 @@ async def create_task(
 @router.get("/{task_id}", response_model=TaskDetailResponse)
 async def get_task(
     task_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_db),
 ) -> TaskDetailResponse:
     result = await session.execute(select(Task).where(Task.id == task_id))
     task = result.scalar_one_or_none()

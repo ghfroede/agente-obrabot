@@ -346,6 +346,7 @@ async def test_finalize_generates_pdf_when_approved(
         return result
 
     session.execute = fake_execute
+    session.get = AsyncMock(return_value=obra)
     session.commit = AsyncMock()
 
     monkeypatch.setattr(
@@ -408,6 +409,7 @@ async def test_approve_and_finalize_rdo_records_single_approval_and_pdf(
         added.append(obj)
 
     session.execute = fake_execute
+    session.get = AsyncMock(return_value=obra)
     session.add.side_effect = fake_add
     session.flush = AsyncMock()
     session.commit = AsyncMock()

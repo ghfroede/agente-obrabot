@@ -3,10 +3,10 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: obrabot
-      POSTGRES_PASSWORD: obrabot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obrabot-dev-pg-change-me}
       POSTGRES_DB: obrabot
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U obrabot"]
       interval: 5s
@@ -15,10 +15,13 @@ services:
 
   redis:
     image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-obrabot-dev-redis-change-me}
+    command: sh -c 'redis-server --requirepass "$$REDIS_PASSWORD"'
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
       interval: 5s
       timeout: 5s
       retries: 5

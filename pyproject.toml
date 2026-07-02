@@ -2,7 +2,7 @@
 name = "obrabot"
 version = "0.1.0"
 description = "Construtora AgentOS — agente de gestão documental de obras"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
@@ -10,7 +10,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30.0",
-    "psycopg2-binary>=2.9.10",
+    "psycopg2-binary>=2.9.10",  # Alembic/scripts sync (asyncpg no runtime da API)
     "alembic>=1.14.0",
     "redis>=5.2.0",
     "rq>=2.0.0",
@@ -54,13 +54,13 @@ show_missing = true
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 ignore_missing_imports = true
 

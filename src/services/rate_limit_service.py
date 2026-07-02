@@ -7,6 +7,7 @@ from redis import Redis
 
 from src.config.env import get_settings
 from src.core.errors import RateLimitError
+from src.core.redis import get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ EXPENSIVE_ROUTE_PATHS = frozenset(
 
 
 def _redis() -> Redis:
-    return Redis.from_url(get_settings().redis_url)
+    return get_redis()
 
 
 def check_openclaw_limits(

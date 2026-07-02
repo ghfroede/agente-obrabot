@@ -71,6 +71,14 @@ O script exporta o `uv.lock` sem dependencias de desenvolvimento para um
 requirements temporario e executa `uvx pip-audit --strict`. O comando deve retornar
 codigo diferente de zero quando houver vulnerabilidade relevante.
 
+## Politica de Dependencias
+
+- **Fonte de verdade:** `uv.lock` (versoes exatas resolvidas no CI e no deploy).
+- **Declaracao em `pyproject.toml`:** piso minimo com `>=` para cada dependencia de runtime e dev.
+- **Atualizacoes:** Dependabot (`.github/dependabot.yml`) abre PRs semanais para pip e GitHub Actions.
+- **Fluxo recomendado:** alterar `pyproject.toml` quando necessario, rodar `uv lock`, validar com `make test`, `make lint`, `make typecheck` e `make security-audit` antes do merge.
+- **`psycopg2-binary`:** mantido para migracoes Alembic (`sync_database_url`) e scripts operacionais sync; o runtime async da API/worker usa `asyncpg`.
+
 Cadencia recomendada:
 
 - semanal enquanto o sistema estiver em testes reais;

@@ -51,6 +51,7 @@ async def test_approve_and_finalize_photo_report_generates_pdf(
         added.append(obj)
 
     session.execute = fake_execute
+    session.get = AsyncMock(return_value=obra)
     session.add.side_effect = fake_add
     session.flush = AsyncMock()
     session.commit = AsyncMock()

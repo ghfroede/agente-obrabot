@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config.env import get_settings
 from src.core.constants import GENERATED_BY, SCHEMA_VERSION, DocumentStatus
-from src.core.errors import ApprovalRequiredError, NotFoundError, ValidationError
+from src.core.errors import ValidationError
 from src.db.models import Aprovacao, Documento, Obra
 from src.services import audit_service, bucket_service, pdf_service
+from src.services import common as service_common
 from src.utils.dates import parse_date, today_iso, utc_now
 from src.utils.filenames import build_document_filename, next_revision
 from src.utils.hashing import sha256_hex
@@ -31,57 +29,19 @@ _RDO_LIST_FIELDS: tuple[str, ...] = (
 )
 
 
-def _jinja_env() -> Environment:
-    settings = get_settings()
-    return Environment(
-        loader=FileSystemLoader(settings.templates_dir),
-        autoescape=select_autoescape(["html", "xml"]),
-    )
-
-
-async def _get_obra(session: AsyncSession, obra_id: str) -> Obra:
-    result = await session.execute(select(Obra).where(Obra.id == obra_id))
-    obra = result.scalar_one_or_none()
-    if obra is None:
-        raise NotFoundError(f"Obra {obra_id} não encontrada")
-    return obra
-
-
-async def _get_documento(session: AsyncSession, documento_id: str | uuid.UUID) -> Documento:
-    doc_id = documento_id if isinstance(documento_id, uuid.UUID) else uuid.UUID(str(documento_id))
-    result = await session.execute(select(Documento).where(Documento.id == doc_id))
-    doc = result.scalar_one_or_none()
-    if doc is None:
-        raise NotFoundError(f"Documento {documento_id} não encontrado")
-    return doc
-
-
 def _require_rdo_document(doc: Documento) -> None:
     if doc.tipo != "rdo":
         raise ValidationError("Documento não é um RDO")
 
 
 async def _require_approval(session: AsyncSession, doc: Documento) -> Aprovacao:
-    if doc.status != DocumentStatus.APROVADO:
-        raise ApprovalRequiredError(
-            f"Documento deve estar APROVADO para finalizar (atual: {doc.status.value})"
-        )
-    result = await session.execute(
-        select(Aprovacao)
-        .where(Aprovacao.documento_id == doc.id, Aprovacao.aprovado.is_(True))
-        .order_by(Aprovacao.created_at.desc())
-        .limit(1)
-    )
-    approval = result.scalar_one_or_none()
-    if approval is None:
-        raise ApprovalRequiredError("Nenhuma aprovação humana registrada para este documento")
-    return approval
+    return await service_common.require_approval(session, doc)
 
 
 def _render_rdo_html(
     *, obra: Obra, data_ref: str, revisao: str, conteudo: dict[str, Any]
 ) -> bytes:
-    env = _jinja_env()
+    env = service_common.jinja_env()
     template = env.get_template("rdo.html")
     html = template.render(
         obra=obra,
@@ -127,7 +87,7 @@ async def create_rdo_draft(
     data_ref: str,
     conteudo: dict[str, Any],
 ) -> dict[str, Any]:
-    obra = await _get_obra(session, obra_id)
+    obra = await service_common.get_obra(session, obra_id)
     data_parsed = parse_date(data_ref) or parse_date(today_iso())
 
     existing = await session.execute(
@@ -214,7 +174,7 @@ async def update_rdo_draft_fields(
     campos: dict[str, Any],
     editor: str,
 ) -> dict[str, Any]:
-    doc = await _get_documento(session, documento_id)
+    doc = await service_common.get_documento(session, documento_id)
     if doc.tipo != "rdo":
         raise ValidationError("Documento não é um RDO")
     if doc.status not in RDO_EDITABLE_STATUSES:
@@ -222,7 +182,7 @@ async def update_rdo_draft_fields(
     if doc.data_ref is None:
         raise ValidationError("RDO sem data_ref")
 
-    obra = await _get_obra(session, doc.obra_id)
+    obra = await service_common.get_obra(session, doc.obra_id)
     data_ref = doc.data_ref.isoformat()
     metadata = _metadata_dict(doc.metadata_json)
     conteudo = _metadata_dict(metadata.get("conteudo"))
@@ -301,7 +261,7 @@ async def _finalize_approved_rdo(
     aprovador: str,
     commit: bool,
 ) -> dict[str, Any]:
-    obra = await _get_obra(session, doc.obra_id)
+    obra = await service_common.get_obra(session, doc.obra_id)
     data_ref = doc.data_ref.isoformat() if doc.data_ref else today_iso()
 
     draft_key = doc.bucket_key or ""
@@ -382,7 +342,7 @@ async def finalize_rdo(
     documento_id: str,
     aprovador: str,
 ) -> dict[str, Any]:
-    doc = await _get_documento(session, documento_id)
+    doc = await service_common.get_documento(session, documento_id)
     _require_rdo_document(doc)
 
     approval = await _require_approval(session, doc)
@@ -402,7 +362,7 @@ async def approve_and_finalize_rdo(
     aprovador: str,
     comentario: str | None = None,
 ) -> dict[str, Any]:
-    doc = await _get_documento(session, documento_id)
+    doc = await service_common.get_documento(session, documento_id)
     _require_rdo_document(doc)
     if doc.status == DocumentStatus.FINALIZADO_VALIDADO:
         raise ValidationError("RDO já finalizado")

@@ -3,12 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response
-from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config.env import get_settings
-from src.db.client import get_async_session
+from src.api.deps import get_db
+from src.core.redis import get_redis
 
 router = APIRouter(tags=["health"])
 
@@ -16,9 +15,8 @@ router = APIRouter(tags=["health"])
 @router.get("/health")
 async def health(
     response: Response,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    settings = get_settings()
     checks: dict[str, str] = {"app": "ok"}
 
     try:
@@ -28,9 +26,7 @@ async def health(
         checks["postgres"] = "error"
 
     try:
-        redis = Redis.from_url(settings.redis_url)
-        await redis.ping()
-        await redis.aclose()
+        get_redis().ping()
         checks["redis"] = "ok"
     except Exception:
         checks["redis"] = "error"

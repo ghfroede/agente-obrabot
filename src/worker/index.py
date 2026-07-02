@@ -1,60 +1,21 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import signal
 import sys
-import uuid
-from datetime import UTC, datetime
 
-from src.agent.ceo import run_ceo_pipeline
 from src.config.env import get_settings
 from src.core.logging import setup_logging
-from src.db.client import SyncSessionLocal
-from src.db.models import Task, TaskStatus
+from src.core.redis import get_redis
 from src.services.entrada_service import run_entrada_pipeline
 
 logger = logging.getLogger(__name__)
 
 
-def _safe_error(exc: Exception) -> str:
-    return str(exc)[:500]
-
-
-def process_task(task_id: str) -> None:
-    session = SyncSessionLocal()
-    try:
-        task = session.get(Task, uuid.UUID(task_id))
-        if task is None:
-            return
-
-        task.status = TaskStatus.PROCESSING
-        task.started_at = datetime.now(UTC)
-        session.commit()
-
-        result = asyncio.run(run_ceo_pipeline(task.input))
-
-        task.status = TaskStatus.COMPLETED
-        task.result = result
-        task.finished_at = datetime.now(UTC)
-        task.error = None
-        session.commit()
-    except Exception as exc:
-        session.rollback()
-        logger.exception("ceo task failed", extra={"task_id": task_id})
-        task = session.get(Task, uuid.UUID(task_id))
-        if task is not None:
-            task.status = TaskStatus.FAILED
-            task.error = _safe_error(exc)
-            task.finished_at = datetime.now(UTC)
-            session.commit()
-        raise
-    finally:
-        session.close()
-
-
 def process_entrada(entrada_id: str) -> None:
     """RQ job: processamento unificado de qualquer canal (api/telegram/openclaw)."""
+    import asyncio
+
     logger.info("rq job process_entrada started", extra={"entrada_id": entrada_id})
     try:
         asyncio.run(run_entrada_pipeline(entrada_id))
@@ -65,13 +26,12 @@ def process_entrada(entrada_id: str) -> None:
 
 
 def main() -> None:
-    from redis import Redis
     from rq import Worker
 
     settings = get_settings()
     setup_logging(is_production=settings.is_production)
     logger.info("worker starting queue=obrabot")
-    redis_conn = Redis.from_url(settings.redis_url)
+    redis_conn = get_redis()
 
     def handle_sigterm(_signum: int, _frame: object) -> None:
         sys.exit(0)

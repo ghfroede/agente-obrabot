@@ -12,10 +12,10 @@ import sys
 from typing import Any
 
 import boto3
-from sqlalchemy import delete, select, text
+from sqlalchemy import create_engine, delete, select, text
+from sqlalchemy.orm import sessionmaker
 
 from src.config.env import get_settings
-from src.db.client import SyncSessionLocal
 from src.db.models import (
     Aprovacao,
     Arquivo,
@@ -75,9 +75,16 @@ def delete_s3_prefix(obra_id: str, *, dry_run: bool) -> int:
     return deleted
 
 
+def _sync_session():
+    settings = get_settings()
+    engine = create_engine(settings.sync_database_url, pool_pre_ping=True)
+    session_factory = sessionmaker(engine, expire_on_commit=False)
+    return session_factory()
+
+
 def cleanup_db(obra_id: str, *, dry_run: bool) -> dict[str, int]:
     counts: dict[str, int] = {}
-    with SyncSessionLocal() as session:
+    with _sync_session() as session:
         obra = session.execute(select(Obra).where(Obra.id == obra_id)).scalar_one_or_none()
         if obra is None:
             print(f"Obra '{obra_id}' não encontrada no banco.")
@@ -168,7 +175,7 @@ def main() -> int:
     print(f"  objetos S3: {s3_count}")
 
     if not args.dry_run and db_counts:
-        with SyncSessionLocal() as session:
+        with _sync_session() as session:
             remaining = session.execute(
                 text("SELECT COUNT(*) FROM obras WHERE id = :id"), {"id": args.obra_id}
             ).scalar()

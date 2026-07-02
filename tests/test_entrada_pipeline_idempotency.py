@@ -61,12 +61,12 @@ async def test_process_skips_when_documento_and_triagem_exist(
         entrada_service.ingestao_service, "ensure_obra", AsyncMock(return_value=obra)
     )
     monkeypatch.setattr(
-        entrada_service,
-        "_load_existing_artifacts",
+        entrada_service.pipeline,
+        "load_existing_artifacts",
         AsyncMock(return_value=(doc, triagem_row)),
     )
     process_media = AsyncMock()
-    monkeypatch.setattr(entrada_service, "_process_media", process_media)
+    monkeypatch.setattr(entrada_service.pipeline, "process_media", process_media)
 
     result = await entrada_service._process(session, entrada)
 
@@ -150,26 +150,32 @@ async def test_process_reuses_bucket_when_storage_key_exists(
         entrada_service.ingestao_service, "ensure_obra", AsyncMock(return_value=obra)
     )
     monkeypatch.setattr(
-        entrada_service,
-        "_load_existing_artifacts",
+        entrada_service.pipeline,
+        "load_existing_artifacts",
         AsyncMock(return_value=(None, None)),
     )
     persist = MagicMock()
-    monkeypatch.setattr(entrada_service.bucket_service, "persist_entrada_bruta", persist)
-    monkeypatch.setattr(entrada_service, "_process_media", AsyncMock(return_value=[]))
     monkeypatch.setattr(
-        entrada_service.openai_service,
+        entrada_service.pipeline.bucket_service, "persist_entrada_bruta", persist
+    )
+    monkeypatch.setattr(entrada_service.pipeline, "process_media", AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        entrada_service.pipeline.openai_service,
         "triagem_structured",
         AsyncMock(return_value=_triagem_output()),
     )
     monkeypatch.setattr(
-        entrada_service.ingestao_service,
+        entrada_service.pipeline.ingestao_service,
         "save_triagem",
         AsyncMock(return_value=triagem_row),
     )
-    monkeypatch.setattr(entrada_service, "_find_telegram_message_id", AsyncMock(return_value=None))
-    monkeypatch.setattr(entrada_service.bucket_service, "persist_triagem_json", MagicMock())
-    monkeypatch.setattr(entrada_service.audit_service, "log_event", AsyncMock())
+    monkeypatch.setattr(
+        entrada_service.pipeline, "find_telegram_message_id", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        entrada_service.pipeline.bucket_service, "persist_triagem_json", MagicMock()
+    )
+    monkeypatch.setattr(entrada_service.pipeline.audit_service, "log_event", AsyncMock())
     session.add = MagicMock()
     session.flush = AsyncMock()
 

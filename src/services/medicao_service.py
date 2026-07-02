@@ -9,8 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.errors import NotFoundError, ValidationError
-from src.db.models import Medicao, MedicaoPeriodo, MedicaoPeriodoStatus, Obra, OrcamentoItem
+from src.db.models import Medicao, MedicaoPeriodo, MedicaoPeriodoStatus, OrcamentoItem
 from src.services import audit_service
+from src.services import common as service_common
 from src.utils.dates import utc_now
 
 _PERIODO_RE = re.compile(r"^(?P<ano>\d{4})-(?P<mes>\d{2})$")
@@ -42,13 +43,6 @@ class _NormalizedMedicaoItem:
     observacoes: str | None
     raw: dict[str, Any]
     orcamento_item: OrcamentoItem
-
-
-async def _get_obra(session: AsyncSession, obra_id: str) -> Obra:
-    obra = await session.get(Obra, obra_id)
-    if obra is None:
-        raise NotFoundError(f"Obra {obra_id} não encontrada")
-    return obra
 
 
 def _normalize_periodo_ref(periodo_ref: str) -> str:
@@ -189,7 +183,7 @@ async def registrar_medicao(
     periodo_ref: str,
     itens: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    obra = await _get_obra(session, obra_id)
+    obra = await service_common.get_obra(session, obra_id)
     periodo_norm = _normalize_periodo_ref(periodo_ref)
     periodo = await _find_periodo(session, obra_id=obra_id, periodo_ref=periodo_norm)
     if periodo is not None and _status_value(periodo.status) == MedicaoPeriodoStatus.FECHADO.value:
@@ -258,7 +252,7 @@ async def fechar_periodo(
     aprovador: str,
     comentario: str | None = None,
 ) -> dict[str, Any]:
-    await _get_obra(session, obra_id)
+    await service_common.get_obra(session, obra_id)
     periodo_norm = _normalize_periodo_ref(periodo_ref)
     periodo = await _find_periodo(session, obra_id=obra_id, periodo_ref=periodo_norm)
     if periodo is None:
