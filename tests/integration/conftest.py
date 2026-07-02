@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import os
 import subprocess
 import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+import psycopg2
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from src.config.env import get_settings
 
 ROOT = Path(__file__).resolve().parents[2]
+INTEGRATION_DIR = Path(__file__).resolve().parent
 DEFAULT_INTEGRATION_URL = "postgresql+asyncpg://obrabot:obrabot@127.0.0.1:5432/obrabot"
 
 TRUNCATE_TABLES = (
@@ -49,16 +50,14 @@ def _sync_database_url(async_url: str) -> str:
     return url
 
 
-async def _postgres_available(url: str) -> bool:
-    engine = create_async_engine(url, pool_pre_ping=True)
+def _postgres_available(sync_url: str) -> bool:
     try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
+        with psycopg2.connect(sync_url) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
         return True
     except Exception:
         return False
-    finally:
-        await engine.dispose()
 
 
 def _run_alembic_upgrade(sync_url: str) -> None:
@@ -80,10 +79,17 @@ def _run_alembic_upgrade(sync_url: str) -> None:
         )
 
 
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    for item in items:
+        item_path = Path(str(getattr(item, "path", item.fspath)))
+        if INTEGRATION_DIR in item_path.parents:
+            item.add_marker(pytest.mark.asyncio(loop_scope="session"))
+
+
 @pytest.fixture(scope="session")
 def integration_db_url() -> str:
     url = integration_database_url()
-    if not asyncio.run(_postgres_available(url)):
+    if not _postgres_available(_sync_database_url(url)):
         pytest.skip("Postgres indisponível para testes de integração")
     return url
 
