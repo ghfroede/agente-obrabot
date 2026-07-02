@@ -94,14 +94,14 @@ def migrated_schema(integration_db_url: str) -> str:
     return integration_db_url
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def integration_engine(migrated_schema: str):
     engine = create_async_engine(migrated_schema, pool_pre_ping=True)
     yield engine
     await engine.dispose()
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def db_session(integration_engine) -> AsyncIterator[AsyncSession]:
     async with integration_engine.begin() as conn:
         tables = ", ".join(TRUNCATE_TABLES)

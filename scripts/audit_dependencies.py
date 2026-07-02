@@ -19,7 +19,16 @@ def main() -> int:
             "--output-file",
             str(requirements_path),
         ]
-        audit_cmd = ["uvx", "pip-audit", "-r", str(requirements_path), "--strict"]
+        audit_cmd = [
+            "uv",
+            "run",
+            "--with",
+            "pip-audit",
+            "pip-audit",
+            "-r",
+            str(requirements_path),
+            "--strict",
+        ]
 
         export_result = subprocess.run(export_cmd, check=False)
         if export_result.returncode != 0:
