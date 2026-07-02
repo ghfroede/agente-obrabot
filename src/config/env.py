@@ -93,7 +93,7 @@ class Settings(BaseSettings):
         return _parse_csv_ints(self.rq_retry_intervals_seconds)
 
     openclaw_shared_secret: str = ""
-    openclaw_require_hmac: bool = False
+    openclaw_require_hmac: bool = True
     openclaw_max_clock_skew_seconds: int = 300
     webhook_max_body_bytes: int = 10_485_760
 

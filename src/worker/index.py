@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import signal
 import sys
 import uuid
 from datetime import UTC, datetime
 
 from src.agent.ceo import run_ceo_pipeline
+from src.config.env import get_settings
+from src.core.logging import setup_logging
 from src.db.client import SyncSessionLocal
 from src.db.models import Task, TaskStatus
 from src.services.entrada_service import run_entrada_pipeline
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_error(exc: Exception) -> str:
@@ -36,6 +41,7 @@ def process_task(task_id: str) -> None:
         session.commit()
     except Exception as exc:
         session.rollback()
+        logger.exception("ceo task failed", extra={"task_id": task_id})
         task = session.get(Task, uuid.UUID(task_id))
         if task is not None:
             task.status = TaskStatus.FAILED
@@ -49,16 +55,22 @@ def process_task(task_id: str) -> None:
 
 def process_entrada(entrada_id: str) -> None:
     """RQ job: processamento unificado de qualquer canal (api/telegram/openclaw)."""
-    asyncio.run(run_entrada_pipeline(entrada_id))
+    logger.info("rq job process_entrada started", extra={"entrada_id": entrada_id})
+    try:
+        asyncio.run(run_entrada_pipeline(entrada_id))
+        logger.info("rq job process_entrada finished", extra={"entrada_id": entrada_id})
+    except Exception:
+        logger.exception("rq job process_entrada failed", extra={"entrada_id": entrada_id})
+        raise
 
 
 def main() -> None:
     from redis import Redis
     from rq import Worker
 
-    from src.config.env import get_settings
-
     settings = get_settings()
+    setup_logging(is_production=settings.is_production)
+    logger.info("worker starting queue=obrabot")
     redis_conn = Redis.from_url(settings.redis_url)
 
     def handle_sigterm(_signum: int, _frame: object) -> None:
@@ -68,7 +80,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, handle_sigterm)
 
     worker = Worker(["obrabot"], connection=redis_conn)
-    worker.work(with_scheduler=False)
+    worker.work(with_scheduler=True)
 
 
 if __name__ == "__main__":

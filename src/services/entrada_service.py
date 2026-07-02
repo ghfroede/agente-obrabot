@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import uuid
 from datetime import UTC, date, datetime
 from typing import Any
@@ -14,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config.env import get_settings
 from src.core.constants import DocumentStatus
 from src.db.client import AsyncSessionLocal
-from src.db.models import Documento, EntradaBruta, Obra, Task, TaskStatus, TelegramMessage
+from src.db.models import Documento, EntradaBruta, Obra, Task, TaskStatus, TelegramMessage, Triagem
 from src.schemas.domain import OpenClawTelegramPayload
 from src.services import (
     audit_service,
@@ -26,6 +27,8 @@ from src.services import (
     telegram_context_service,
     telegram_media_service,
 )
+
+logger = logging.getLogger(__name__)
 
 PENDING_OBRA_STATUS = "pending_obra"
 PENDING_OBRA_IDEMPOTENCY_SCOPE = "__PENDING_OBRA__"
@@ -328,9 +331,11 @@ async def run_entrada_pipeline(entrada_id: str) -> dict[str, Any]:
 
     Abre a própria sessão async e atualiza ``EntradaBruta`` (e a ``Task`` ligada, se houver).
     """
+    logger.info("entrada pipeline starting", extra={"entrada_id": entrada_id})
     async with AsyncSessionLocal() as session:
         entrada = await session.get(EntradaBruta, uuid.UUID(entrada_id))
         if entrada is None:
+            logger.warning("entrada pipeline entrada not found", extra={"entrada_id": entrada_id})
             return {}
         entrada.status = "processing"
         await session.commit()
@@ -343,16 +348,79 @@ async def run_entrada_pipeline(entrada_id: str) -> dict[str, Any]:
             await session.commit()
             if reply is not None:
                 await _send_reply(*reply)
+            logger.info(
+                "entrada pipeline completed",
+                extra={
+                    "entrada_id": entrada_id,
+                    "obra_id": result.get("obra_id"),
+                    "documento_id": result.get("documento_id"),
+                },
+            )
             return result
         except Exception as exc:
+            logger.exception("entrada pipeline failed", extra={"entrada_id": entrada_id})
             await session.rollback()
             failed = await session.get(EntradaBruta, uuid.UUID(entrada_id))
             if failed is not None:
                 failed.status = "failed"
                 failed.processed_at = datetime.now(UTC)
                 await _mark_task(session, failed, TaskStatus.FAILED, error=str(exc)[:500])
+                await _fail_entrada_idempotency(session, failed, str(exc))
                 await session.commit()
             raise
+
+
+async def _fail_entrada_idempotency(
+    session: AsyncSession, entrada: EntradaBruta, error: str
+) -> None:
+    if not entrada.idempotency_key:
+        return
+    parts = entrada.idempotency_key.split(":", 2)
+    if len(parts) != 3:
+        return
+    event_id, content_hash_value, obra_id = parts
+    await ingestao_service.fail_idempotency(
+        session,
+        event_id=event_id,
+        content_hash=content_hash_value,
+        obra_id=obra_id,
+        error=error,
+    )
+
+
+async def _load_existing_artifacts(
+    session: AsyncSession, entrada_id: uuid.UUID
+) -> tuple[Documento | None, Triagem | None]:
+    doc_result = await session.execute(
+        select(Documento).where(Documento.entrada_id == entrada_id).limit(1)
+    )
+    doc = doc_result.scalar_one_or_none()
+    triagem_result = await session.execute(
+        select(Triagem).where(Triagem.entrada_id == entrada_id).limit(1)
+    )
+    triagem = triagem_result.scalar_one_or_none()
+    return doc, triagem
+
+
+def _result_from_existing(
+    entrada: EntradaBruta, obra: Obra, doc: Documento, triagem_row: Triagem
+) -> dict[str, Any]:
+    metadata = doc.metadata_json if isinstance(doc.metadata_json, dict) else {}
+    return {
+        "entrada_id": str(entrada.id),
+        "obra_id": obra.id,
+        "documento_id": str(doc.id),
+        "triagem_id": str(triagem_row.id),
+        "tipo_documento": triagem_row.tipo_documento,
+        "confianca": triagem_row.confianca,
+        "resumo": triagem_row.resumo,
+        "acao_sugerida": triagem_row.acao_sugerida,
+        "precisa_aprovacao": triagem_row.precisa_aprovacao,
+        "entrada_bucket_uri": entrada.storage_uri or metadata.get("entrada_bucket"),
+        "midias": metadata.get("midias", []),
+        "status": doc.status.value,
+        "retomado": True,
+    }
 
 
 async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, Any]:
@@ -365,26 +433,37 @@ async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, An
         }
 
     obra = await ingestao_service.ensure_obra(session, entrada.obra_id)
+    logger.info(
+        "entrada processing",
+        extra={"entrada_id": str(entrada.id), "obra_id": obra.id},
+    )
+
+    doc_existing, triagem_existing = await _load_existing_artifacts(session, entrada.id)
+    if doc_existing is not None and triagem_existing is not None:
+        return _result_from_existing(entrada, obra, doc_existing, triagem_existing)
 
     # 1. Persiste raw no bucket (FONTE DE VERDADE) ANTES da IA.
-    envelope = entrada.raw_payload or {"text": entrada.text}
-    message_id = None
-    telegram = envelope.get("telegram")
-    if isinstance(telegram, dict):
-        message_id = telegram.get("message_id")
+    if entrada.storage_key and entrada.storage_uri:
+        bucket_key, bucket_uri = entrada.storage_key, entrada.storage_uri
+    else:
+        envelope = entrada.raw_payload or {"text": entrada.text}
+        message_id = None
+        telegram = envelope.get("telegram")
+        if isinstance(telegram, dict):
+            message_id = telegram.get("message_id")
 
-    bucket_key, bucket_uri = bucket_service.persist_entrada_bruta(
-        obra_id=obra.id,
-        event_id=entrada.event_id or str(entrada.id),
-        envelope={"entrada_id": str(entrada.id), "source": entrada.source, **envelope},
-        source=entrada.source,
-        slug=obra.slug,
-        message_id=message_id,
-        data_ref=entrada.data_ref,
-        entrada_id=str(entrada.id),
-    )
-    entrada.storage_key = bucket_key
-    entrada.storage_uri = bucket_uri
+        bucket_key, bucket_uri = bucket_service.persist_entrada_bruta(
+            obra_id=obra.id,
+            event_id=entrada.event_id or str(entrada.id),
+            envelope={"entrada_id": str(entrada.id), "source": entrada.source, **envelope},
+            source=entrada.source,
+            slug=obra.slug,
+            message_id=message_id,
+            data_ref=entrada.data_ref,
+            entrada_id=str(entrada.id),
+        )
+        entrada.storage_key = bucket_key
+        entrada.storage_uri = bucket_uri
 
     # 2. Mídia (foto/áudio/documento): baixa do Telegram, persiste Arquivo e roda
     #    visão/transcrição. Falha de uma mídia degrada — o raw já é fonte de verdade.
@@ -397,56 +476,65 @@ async def _process(session: AsyncSession, entrada: EntradaBruta) -> dict[str, An
     )
 
     # 4. Documento + Triagem + Auditoria.
-    doc = Documento(
-        obra_id=obra.id,
-        entrada_id=entrada.id,
-        tipo=triagem.tipo_documento,
-        titulo=f"{triagem.tipo_documento} — {str(entrada.id)[:8]}",
-        revisao="REV00",
-        status=DocumentStatus.TRIADO,
-        arquivo_id=_primary_arquivo_id(midias),
-        metadata_json={
-            "entrada_bucket": bucket_uri,
-            "entrada_bucket_key": bucket_key,
-            "entrada_id": str(entrada.id),
-            "texto": entrada.text,
-            "source": entrada.source,
-            "data_ref": entrada.data_ref.isoformat() if entrada.data_ref else None,
-            "midias": midias,
-        },
-    )
-    session.add(doc)
-    await session.flush()
-    triagem_row = await ingestao_service.save_triagem(
-        session,
-        obra_id=obra.id,
-        output=triagem,
-        entrada_id=entrada.id,
-        telegram_message_id=await _find_telegram_message_id(session, entrada.event_id),
-        documento_id=doc.id,
-    )
-    bucket_service.persist_triagem_json(
-        obra_id=obra.id,
-        triagem_id=str(triagem_row.id),
-        payload=triagem.model_dump(),
-        slug=obra.slug,
-    )
-    await audit_service.log_event(
-        session,
-        entidade="entrada_bruta",
-        entidade_id=str(entrada.id),
-        acao="ingestao",
-        obra_id=obra.id,
-        actor=entrada.author,
-        detalhes={
-            "source": entrada.source,
-            "entrada_id": str(entrada.id),
-            "event_id": entrada.event_id,
-            "tipo_documento": triagem.tipo_documento,
-            "bucket_key": bucket_key,
-            "midias": [m.get("kind") for m in midias],
-        },
-    )
+    if doc_existing is not None:
+        doc = doc_existing
+        if isinstance(doc.metadata_json, dict):
+            doc.metadata_json = {**doc.metadata_json, "midias": midias}
+    else:
+        doc = Documento(
+            obra_id=obra.id,
+            entrada_id=entrada.id,
+            tipo=triagem.tipo_documento,
+            titulo=f"{triagem.tipo_documento} — {str(entrada.id)[:8]}",
+            revisao="REV00",
+            status=DocumentStatus.TRIADO,
+            arquivo_id=_primary_arquivo_id(midias),
+            metadata_json={
+                "entrada_bucket": bucket_uri,
+                "entrada_bucket_key": bucket_key,
+                "entrada_id": str(entrada.id),
+                "texto": entrada.text,
+                "source": entrada.source,
+                "data_ref": entrada.data_ref.isoformat() if entrada.data_ref else None,
+                "midias": midias,
+            },
+        )
+        session.add(doc)
+        await session.flush()
+
+    if triagem_existing is not None:
+        triagem_row = triagem_existing
+    else:
+        triagem_row = await ingestao_service.save_triagem(
+            session,
+            obra_id=obra.id,
+            output=triagem,
+            entrada_id=entrada.id,
+            telegram_message_id=await _find_telegram_message_id(session, entrada.event_id),
+            documento_id=doc.id,
+        )
+        bucket_service.persist_triagem_json(
+            obra_id=obra.id,
+            triagem_id=str(triagem_row.id),
+            payload=triagem.model_dump(),
+            slug=obra.slug,
+        )
+        await audit_service.log_event(
+            session,
+            entidade="entrada_bruta",
+            entidade_id=str(entrada.id),
+            acao="ingestao",
+            obra_id=obra.id,
+            actor=entrada.author,
+            detalhes={
+                "source": entrada.source,
+                "entrada_id": str(entrada.id),
+                "event_id": entrada.event_id,
+                "tipo_documento": triagem.tipo_documento,
+                "bucket_key": bucket_key,
+                "midias": [m.get("kind") for m in midias],
+            },
+        )
     return {
         "entrada_id": str(entrada.id),
         "obra_id": obra.id,
@@ -480,7 +568,12 @@ async def _process_media(
     results: list[dict[str, Any]] = []
     for ref in refs:
         try:
-            data = await telegram_media_service.download_file(ref.file_id)
+            max_bytes = telegram_media_service.max_bytes_for_ref(ref)
+            if ref.file_size is not None and ref.file_size > max_bytes:
+                raise telegram_media_service.MediaTooLargeError(
+                    f"mídia excede limite de {max_bytes} bytes"
+                )
+            data = await telegram_media_service.download_file(ref.file_id, max_bytes=max_bytes)
             summary = await media_service.ingest_media(
                 session,
                 obra_id=obra_id,
@@ -645,4 +738,9 @@ async def _send_reply(chat_id: int, texto: str) -> None:
     try:
         await telegram_media_service.send_message(chat_id, texto)
     except Exception:
+        logger.warning(
+            "telegram reply failed",
+            extra={"chat_id": chat_id},
+            exc_info=True,
+        )
         return

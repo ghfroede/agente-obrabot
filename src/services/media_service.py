@@ -9,8 +9,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config.env import get_settings
 from src.db.models import Arquivo, AudioTranscricao, Foto
 from src.services import bucket_service, openai_service
-from src.services.telegram_media_service import AUDIO, DOCUMENTO, PHOTO, MediaRef, file_ext
+from src.services.telegram_media_service import (
+    AUDIO,
+    DOCUMENTO,
+    PHOTO,
+    MediaRef,
+    file_ext,
+    max_bytes_for_ref,
+)
 from src.utils.hashing import sha256_hex
+
+
+class MediaSizeError(ValueError):
+    """Mídia excede o limite configurado."""
+
+
+def validate_media_size(ref: MediaRef, data: bytes) -> None:
+    limit = max_bytes_for_ref(ref)
+    if len(data) > limit:
+        raise MediaSizeError(f"mídia excede limite de {limit} bytes")
 
 
 async def persist_arquivo(
@@ -25,6 +42,7 @@ async def persist_arquivo(
     data_ref: str | None = None,
 ) -> Arquivo:
     """Calcula hash, grava o binário no bucket (raw) e cria a linha ``Arquivo``."""
+    validate_media_size(ref, data)
     file_hash = sha256_hex(data)
     ext = file_ext(ref)
     key = bucket_service.build_arquivo_key(

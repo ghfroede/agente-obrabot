@@ -4,6 +4,7 @@ import hmac
 import json
 import uuid
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
@@ -69,9 +70,29 @@ def _is_htmx(request: Request) -> bool:
     return request.headers.get("HX-Request") == "true"
 
 
+def _origin_parts(url: str) -> tuple[str, str, int | None]:
+    parsed = urlsplit(url)
+    scheme = parsed.scheme.lower()
+    host = (parsed.hostname or "").lower()
+    return scheme, host, parsed.port
+
+
+def _default_port(scheme: str) -> int | None:
+    if scheme == "https":
+        return 443
+    if scheme == "http":
+        return 80
+    return None
+
+
+def _effective_port(scheme: str, port: int | None) -> int | None:
+    return port if port is not None else _default_port(scheme)
+
+
 def _check_same_origin(request: Request) -> None:
     """Defesa-em-profundidade CSRF: POST exige Origin/Referer same-origin.
 
+    Compara scheme, host e porta exatos (evita bypass por prefixo de host).
     Em produção, ausência total de Origin e Referer é bloqueada (fail-closed).
     Em dev, mantém-se permissivo para facilitar testes manuais.
     """
@@ -82,8 +103,14 @@ def _check_same_origin(request: Request) -> None:
             raise HTTPException(status_code=403, detail="Origem não verificada")
         return
     source = origin or referer
-    base = str(request.base_url).rstrip("/")
-    if source is None or not source.startswith(base):
+    if source is None:
+        raise HTTPException(status_code=403, detail="Origem não autorizada")
+
+    base_scheme, base_host, base_port = _origin_parts(str(request.base_url))
+    source_scheme, source_host, source_port = _origin_parts(source)
+    if source_scheme != base_scheme or source_host != base_host:
+        raise HTTPException(status_code=403, detail="Origem não autorizada")
+    if _effective_port(source_scheme, source_port) != _effective_port(base_scheme, base_port):
         raise HTTPException(status_code=403, detail="Origem não autorizada")
 
 
@@ -124,6 +151,7 @@ async def login_form(request: Request) -> Any:
 
 @router.post("/login")
 async def login_submit(request: Request, senha: str = Form(...)) -> Any:
+    _check_same_origin(request)
     senha_efetiva = effective_admin_password()
     # Checagem de config ANTES de compare_digest — compare_digest(x, "") seria False
     # e mascararia o 500 como falha de senha.

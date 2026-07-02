@@ -73,7 +73,10 @@ async def test_login_correct_password_sets_session(monkeypatch: pytest.MonkeyPat
     app = _app_with_db(monkeypatch)
     async with _client(app) as client:
         response = await client.post(
-            "/admin/login", data={"senha": "segredo123"}, follow_redirects=False
+            "/admin/login",
+            data={"senha": "segredo123"},
+            headers={"Origin": "http://test"},
+            follow_redirects=False,
         )
 
     assert response.status_code == 303
@@ -121,3 +124,48 @@ async def test_create_app_fails_closed_without_session_secret_in_prod(
 
     with pytest.raises(RuntimeError, match="OBRABOT_API_KEY"):
         create_app()
+
+
+async def test_same_origin_rejects_host_prefix_bypass(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _app_with_db(monkeypatch)
+    async with _client(app) as client:
+        response = await client.post(
+            "/admin/logout",
+            headers={"Origin": "http://test.evil.com"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Origem não autorizada"
+
+
+async def test_same_origin_allows_exact_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _app_with_db(monkeypatch)
+    async with _client(app) as client:
+        await client.post(
+            "/admin/login",
+            data={"senha": "segredo123"},
+            headers={"Origin": "http://test"},
+            follow_redirects=False,
+        )
+        response = await client.post(
+            "/admin/logout",
+            headers={"Origin": "http://test"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/admin/login"
+
+
+async def test_login_rejects_host_prefix_bypass(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _app_with_db(monkeypatch)
+    async with _client(app) as client:
+        response = await client.post(
+            "/admin/login",
+            data={"senha": "segredo123"},
+            headers={"Origin": "http://test.evil.com"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 403

@@ -55,7 +55,11 @@ async def test_process_media_happy_path(monkeypatch: pytest.MonkeyPatch) -> None
 
     assert len(results) == 1
     assert results[0]["descricao"] == "parede"
-    entrada_service.telegram_media_service.download_file.assert_awaited_once_with("F1")
+    entrada_service.telegram_media_service.download_file.assert_awaited_once()
+    call_args = entrada_service.telegram_media_service.download_file.await_args
+    assert call_args is not None
+    assert call_args.args == ("F1",)
+    assert "max_bytes" in call_args.kwargs
     _, kwargs = ingest.await_args
     assert kwargs["entrada_id"] == entrada.id
     assert kwargs["data_ref"] == date(2023, 11, 14)

@@ -226,5 +226,28 @@ async def test_static_secret_header_accepted_in_legacy_dev(
     )
     body = json.dumps({"event_id": "e1"}).encode()
     request = _make_request(body, headers={"X-OpenClaw-Secret": SECRET})
+    monkeypatch.setattr(security.rate_limit_service, "check_openclaw_limits", lambda **_: None)
     result = await security.verify_openclaw_webhook(request)
     assert result == body
+
+
+async def test_no_credentials_rejected_when_secret_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        security,
+        "get_settings",
+        lambda: SimpleNamespace(
+            openclaw_shared_secret=SECRET,
+            is_production=False,
+            openclaw_require_hmac=False,
+            openclaw_max_clock_skew_seconds=300,
+            webhook_max_body_bytes=10_485_760,
+            rate_limit_enabled=False,
+        ),
+    )
+    body = json.dumps({"event_id": "e1"}).encode()
+    with pytest.raises(HTTPException) as exc:
+        await security.verify_openclaw_webhook(_make_request(body))
+    assert exc.value.status_code == 401
+    assert "Credencial OpenClaw obrigatória" in exc.value.detail

@@ -83,6 +83,24 @@ def validate_telegram_allowlist(payload: OpenClawTelegramPayload) -> None:
             raise ForbiddenError(f"Thread {thread_id} não autorizada")
 
 
+def _check_openclaw_event_dedup(body: bytes) -> None:
+    try:
+        payload_data: dict[str, Any] = json.loads(body)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=401, detail="Body inválido (JSON esperado)")
+    event_id = payload_data.get("event_id")
+    if not event_id:
+        raise HTTPException(status_code=401, detail="event_id obrigatório no payload")
+    telegram = payload_data.get("telegram") or {}
+    chat = telegram.get("chat") or {}
+    from_user = telegram.get("from") or {}
+    rate_limit_service.check_openclaw_limits(
+        chat_id=chat.get("id"),
+        user_id=from_user.get("id"),
+        event_id=str(event_id),
+    )
+
+
 async def verify_openclaw_webhook(request: Request) -> bytes:
     """Valida autenticação, tamanho do body e HMAC. Retorna o body para reuso."""
     settings = get_settings()
@@ -103,7 +121,8 @@ async def verify_openclaw_webhook(request: Request) -> bytes:
     if not secret:
         return body
 
-    if not require_hmac and static_secret and hmac.compare_digest(static_secret, secret):
+    if static_secret and hmac.compare_digest(static_secret, secret) and not require_hmac:
+        _check_openclaw_event_dedup(body)
         return body
 
     if require_hmac or signature:
@@ -149,7 +168,9 @@ async def verify_openclaw_webhook(request: Request) -> bytes:
             event_id=event_id,
         )
 
-    return body
+        return body
+
+    raise HTTPException(status_code=401, detail="Credencial OpenClaw obrigatória")
 
 
 def verify_openclaw_secret(x_openclaw_secret: str | None = None) -> None:

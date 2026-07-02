@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -34,6 +35,7 @@ from src.core.errors import (
     RateLimitError,
     UnauthorizedError,
 )
+from src.core.logging import setup_logging
 
 # server.py em src/api/server.py → parent = src/api ; parent.parent = src/.
 _STATIC_ADMIN = Path(__file__).resolve().parent.parent / "static" / "admin"
@@ -48,6 +50,9 @@ _CORS_ALLOW_HEADERS = [
     "X-Timestamp",
     "X-Event-Id",
 ]
+
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -65,6 +70,7 @@ def _resolve_cors_origins(*, cors_origins: list[str], is_production: bool) -> li
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    setup_logging(is_production=settings.is_production)
     docs_enabled = not settings.is_production
     cors_origins = _resolve_cors_origins(
         cors_origins=settings.cors_origins,
@@ -127,23 +133,28 @@ def create_app() -> FastAPI:
     app.include_router(medicoes_router, dependencies=protected_dependencies)
 
     @app.exception_handler(NotFoundError)
-    async def not_found_handler(_request: Request, exc: NotFoundError) -> JSONResponse:
+    async def not_found_handler(request: Request, exc: NotFoundError) -> JSONResponse:
+        logger.warning("not_found path=%s detail=%s", request.url.path, exc)
         return JSONResponse(status_code=404, content={"detail": str(exc)})
 
     @app.exception_handler(UnauthorizedError)
     async def unauthorized_handler(_request: Request, exc: UnauthorizedError) -> JSONResponse:
+        logger.warning("unauthorized detail=%s", exc)
         return JSONResponse(status_code=401, content={"detail": str(exc)})
 
     @app.exception_handler(ForbiddenError)
     async def forbidden_handler(_request: Request, exc: ForbiddenError) -> JSONResponse:
+        logger.warning("forbidden detail=%s", exc)
         return JSONResponse(status_code=403, content={"detail": str(exc)})
 
     @app.exception_handler(RateLimitError)
     async def rate_limit_handler(_request: Request, exc: RateLimitError) -> JSONResponse:
+        logger.warning("rate_limit detail=%s", exc)
         return JSONResponse(status_code=429, content={"detail": str(exc)})
 
     @app.exception_handler(ApprovalRequiredError)
     async def approval_handler(_request: Request, exc: ApprovalRequiredError) -> JSONResponse:
+        logger.info("approval_required detail=%s", exc)
         return JSONResponse(status_code=400, content={"detail": str(exc)})
 
     @app.exception_handler(AdminLoginRequired)
@@ -153,8 +164,14 @@ def create_app() -> FastAPI:
         return RedirectResponse("/admin/login", status_code=303)
 
     @app.exception_handler(ObrabotError)
-    async def obrabot_error_handler(_request: Request, exc: ObrabotError) -> JSONResponse:
+    async def obrabot_error_handler(request: Request, exc: ObrabotError) -> JSONResponse:
+        logger.warning("obrabot_error path=%s detail=%s", request.url.path, exc)
         return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.exception("unhandled_error method=%s path=%s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"detail": "Erro interno do servidor"})
 
     return app
 

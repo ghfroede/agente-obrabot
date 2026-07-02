@@ -18,6 +18,10 @@ class TelegramMediaError(RuntimeError):
     """Falha ao baixar/enviar mídia via API do Telegram."""
 
 
+class MediaTooLargeError(TelegramMediaError):
+    """Mídia excede o limite configurado."""
+
+
 @dataclass(frozen=True)
 class MediaRef:
     """Referência a uma mídia do Telegram (file_id + metadados conhecidos)."""
@@ -102,10 +106,27 @@ def file_ext(ref: MediaRef) -> str:
     return "bin"
 
 
-async def download_file(file_id: str, *, client: httpx.AsyncClient | None = None) -> bytes:
+def max_bytes_for_ref(ref: MediaRef) -> int:
+    settings = get_settings()
+    if ref.kind == PHOTO:
+        return settings.max_image_bytes
+    if ref.kind == AUDIO:
+        return settings.max_audio_bytes
+    if ref.kind == DOCUMENTO:
+        return settings.max_document_bytes
+    return settings.max_document_bytes
+
+
+async def download_file(
+    file_id: str,
+    *,
+    client: httpx.AsyncClient | None = None,
+    max_bytes: int | None = None,
+) -> bytes:
     """Baixa o conteúdo de uma mídia: ``getFile`` → resolve ``file_path`` → download binário.
 
     ``client`` é injetável para testes (ex.: ``httpx.MockTransport``).
+    Quando ``max_bytes`` é informado, rejeita mídias maiores (streaming com cap).
     """
     settings = get_settings()
     token = settings.telegram_bot_token
@@ -122,10 +143,28 @@ async def download_file(file_id: str, *, client: httpx.AsyncClient | None = None
         if not body.get("ok"):
             raise TelegramMediaError(f"getFile falhou: {body}")
         file_path = body["result"]["file_path"]
+        file_size = body["result"].get("file_size")
+        if max_bytes is not None and isinstance(file_size, int) and file_size > max_bytes:
+            raise MediaTooLargeError(f"mídia excede limite de {max_bytes} bytes")
 
-        download = await client.get(f"{base}/file/bot{token}/{file_path}")
-        download.raise_for_status()
-        return download.content
+        async with client.stream("GET", f"{base}/file/bot{token}/{file_path}") as download:
+            download.raise_for_status()
+            content_length = download.headers.get("content-length")
+            if (
+                max_bytes is not None
+                and content_length is not None
+                and int(content_length) > max_bytes
+            ):
+                raise MediaTooLargeError(f"mídia excede limite de {max_bytes} bytes")
+
+            chunks: list[bytes] = []
+            total = 0
+            async for chunk in download.aiter_bytes():
+                total += len(chunk)
+                if max_bytes is not None and total > max_bytes:
+                    raise MediaTooLargeError(f"mídia excede limite de {max_bytes} bytes")
+                chunks.append(chunk)
+            return b"".join(chunks)
     finally:
         if owns_client:
             await client.aclose()
