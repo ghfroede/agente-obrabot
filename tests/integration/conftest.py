@@ -11,11 +11,11 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from src.config.env import get_settings
 
 ROOT = Path(__file__).resolve().parents[2]
-INTEGRATION_DIR = Path(__file__).resolve().parent
 DEFAULT_INTEGRATION_URL = "postgresql+asyncpg://obrabot:obrabot@127.0.0.1:5432/obrabot"
 
 TRUNCATE_TABLES = (
@@ -79,13 +79,6 @@ def _run_alembic_upgrade(sync_url: str) -> None:
         )
 
 
-def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    for item in items:
-        item_path = Path(str(getattr(item, "path", item.fspath)))
-        if INTEGRATION_DIR in item_path.parents:
-            item.add_marker(pytest.mark.asyncio(loop_scope="session"))
-
-
 @pytest.fixture(scope="session")
 def integration_db_url() -> str:
     url = integration_database_url()
@@ -100,14 +93,18 @@ def migrated_schema(integration_db_url: str) -> str:
     return integration_db_url
 
 
-@pytest_asyncio.fixture(scope="session", loop_scope="session")
+@pytest_asyncio.fixture
 async def integration_engine(migrated_schema: str):
-    engine = create_async_engine(migrated_schema, pool_pre_ping=True)
+    engine = create_async_engine(
+        migrated_schema,
+        pool_pre_ping=True,
+        poolclass=NullPool,
+    )
     yield engine
     await engine.dispose()
 
 
-@pytest_asyncio.fixture(loop_scope="session")
+@pytest_asyncio.fixture
 async def db_session(integration_engine) -> AsyncIterator[AsyncSession]:
     async with integration_engine.begin() as conn:
         tables = ", ".join(TRUNCATE_TABLES)
