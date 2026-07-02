@@ -96,6 +96,7 @@
       font: inherit; font-weight: 600; cursor: pointer; text-decoration: none;
       padding: .62rem 1.45rem; border-radius: var(--pill); border: 1px solid transparent;
       background: var(--blue); color: #fff; box-shadow: var(--shadow-1);
+      position: relative; overflow: hidden;
       transition: background .18s var(--ease), transform .16s var(--spring), box-shadow .2s var(--ease);
     }
     button:hover, input[type=submit]:hover, a.btn:hover {
@@ -135,6 +136,13 @@
       color: #fff; border-radius: 28px; padding: clamp(2rem, 4vw, 3.4rem); margin-bottom: 2rem;
       box-shadow: var(--shadow-2); overflow: hidden; position: relative;
     }
+    /* spotlight that follows the pointer (JS sets --mx/--my) */
+    .hero::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+      transition: opacity .45s var(--ease);
+      background: radial-gradient(460px 340px at var(--mx, 70%) var(--my, 30%), rgba(110,160,255,.18), transparent 60%);
+    }
+    .hero:hover::after { opacity: 1; }
     .hero .eyebrow { color: #9ec5ff; }
     .hero h1 { color: #fff; max-width: 20ch; }
     .hero p { color: #cfcfcf; max-width: 54ch; font-size: 1.12rem; }
@@ -145,7 +153,9 @@
       background: var(--grad); color: #fff; border-radius: 20px; padding: 1.3rem 1.7rem; margin-bottom: 1.8rem;
       display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
       box-shadow: 0 10px 30px rgba(180,60,120,.25);
+      background-size: 200% 200%; animation: pan 16s ease-in-out infinite alternate;
     }
+    @keyframes pan { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
     .banner h2, .banner p { color: #fff; margin: 0; }
     .banner h2 { font-size: 1.25rem; }
     .banner p { opacity: .92; }
@@ -160,14 +170,21 @@
     .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
 
     table {
-      border-collapse: separate; border-spacing: 0; width: 100%; border-radius: var(--r-card); overflow: hidden;
+      border-collapse: separate; border-spacing: 0; width: 100%; border-radius: var(--r-card);
+      overflow: hidden; /* fallback: clips radius but kills sticky th (pre-clip browsers) */
       background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-1);
     }
+    /* overflow:hidden makes the table the th's scroll container → sticky never engages;
+       clip preserves the radius AND lets the th stick to the viewport */
+    @supports (overflow: clip) { table { overflow: clip; } }
     th, td { padding: .8rem .95rem; text-align: left; border-bottom: 1px solid var(--border); }
     th { background: var(--bg-soft); color: var(--ink-2); font-weight: 700; font-size: .82rem;
-      letter-spacing: .04em; text-transform: uppercase; position: sticky; top: 0; }
+      letter-spacing: .04em; text-transform: uppercase;
+      /* stick below the sticky nav (JS keeps --nav-h in sync with the real nav height) */
+      position: sticky; top: var(--nav-h, 0px); z-index: 1; }
     tbody tr { transition: background .15s var(--ease); }
     tbody tr:hover { background: #f7f9fc; }
+    tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
     tr:last-child td { border-bottom: none; }
 
     pre {
@@ -230,6 +247,46 @@
     .text-cell { max-width: 440px; overflow-wrap: anywhere; }
     .wide-field { max-width: 100% !important; }
 
+    /* ===== interaction layer ===== */
+    html { scroll-behavior: smooth; }
+    /* cross-fade between pages (progressive enhancement, Chromium MPA) */
+    @media not (prefers-reduced-motion: reduce) {
+      @view-transition { navigation: auto; }
+    }
+    /* nav elevates once the page scrolls */
+    nav { transition: box-shadow .25s var(--ease); }
+    nav.scrolled { box-shadow: 0 6px 22px rgba(20,20,20,.10); }
+    /* click ripple (JS injects .ripple span; skipped under reduced motion) */
+    .ripple {
+      position: absolute; border-radius: 50%; transform: scale(0); pointer-events: none;
+      background: rgba(255,255,255,.45); animation: ripple .55s var(--ease) forwards;
+    }
+    .btn-ghost .ripple, .btn-light .ripple, nav button .ripple { background: rgba(20,20,20,.10); }
+    @keyframes ripple { to { transform: scale(2.6); opacity: 0; } }
+    /* sheen sweep across pills on hover */
+    button::after, a.btn::after {
+      content: ""; position: absolute; top: 0; left: -130%; width: 60%; height: 100%;
+      background: linear-gradient(105deg, transparent, rgba(255,255,255,.35), transparent);
+      transform: skewX(-18deg); transition: left .55s var(--ease); pointer-events: none;
+    }
+    button:hover::after, a.btn:hover::after { left: 150%; }
+    .btn-ghost::after, .btn-light::after, nav button::after {
+      background: linear-gradient(105deg, transparent, rgba(20,20,20,.06), transparent);
+    }
+    /* async feedback: spinner while an HTMX request is in flight */
+    .is-loading { pointer-events: none; opacity: .8; }
+    /* overlay in the right padding — absolute like ripple/sheen, so zero layout shift */
+    .is-loading::before {
+      content: ""; position: absolute; right: .55rem; top: 50%; width: 1em; height: 1em;
+      margin-top: -.5em; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,.45); border-top-color: #fff;
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* fragments swapped in by HTMX settle with the same rise motion */
+    .htmx-settling { animation: rise .35s var(--ease); }
+    .htmx-swapping { opacity: 0; transition: opacity .15s ease-out; }
+
     @media (max-width: 760px) {
       nav { flex-wrap: wrap; gap: .3rem; padding: .6rem .9rem; }
       .nav-link span { display: none; } .nav-link { padding: .55rem; }
@@ -238,7 +295,17 @@
       table { font-size: .92rem; } th, td { padding: .65rem .7rem; }
       .banner { flex-direction: column; align-items: flex-start; }
     }
-    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      html { scroll-behavior: auto; }
+      /* a frozen ring is meaningless — opacity + aria-busy still signal the in-flight state */
+      .is-loading::before { content: none; }
+    }
+    /* visually hidden, still announced by screen readers */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
   </style>
 </head>
 <body>
@@ -275,6 +342,7 @@
   <main>
     {% block content %}{% endblock %}
   </main>
+  <div id="sr-status" role="status" aria-live="polite" class="sr-only"></div>
   <script>
     // progressive enhancement: tone status badges by their text (color is not the only cue — dot + text remain)
     (function () {
@@ -291,6 +359,116 @@
       }
       paint(document);
       document.body.addEventListener('htmx:afterSwap', function (e) { paint(e.target); });
+    })();
+
+    // interaction layer: ripple, spotlight, count-up, nav elevation, HTMX loading states
+    (function () {
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // nav elevates once the page scrolls
+      var nav = document.querySelector('nav');
+      if (nav) {
+        var onScroll = function () { nav.classList.toggle('scrolled', window.scrollY > 8); };
+        window.addEventListener('scroll', onScroll, { passive: true });
+        onScroll();
+      }
+
+      // click ripple on pills (buttons + .btn links)
+      document.addEventListener('pointerdown', function (e) {
+        if (reduce) return;
+        var b = e.target.closest && e.target.closest('button, a.btn');
+        if (!b) return;
+        var r = b.getBoundingClientRect(), d = Math.max(r.width, r.height);
+        var s = document.createElement('span');
+        s.className = 'ripple';
+        s.style.width = s.style.height = d + 'px';
+        s.style.left = (e.clientX - r.left - d / 2) + 'px';
+        s.style.top = (e.clientY - r.top - d / 2) + 'px';
+        b.appendChild(s);
+        setTimeout(function () { s.remove(); }, 600);
+      });
+
+      // hero spotlight follows the pointer
+      var hero = document.querySelector('.hero');
+      if (hero && !reduce) {
+        hero.addEventListener('pointermove', function (e) {
+          var r = hero.getBoundingClientRect();
+          hero.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+          hero.style.setProperty('--my', (e.clientY - r.top) + 'px');
+        });
+      }
+
+      // metric count-up (pure integers only; original value stays if JS is off)
+      if (!reduce) {
+        document.querySelectorAll('.metric strong').forEach(function (el) {
+          var raw = el.textContent.trim(), n = parseInt(raw, 10);
+          if (!/^\d+$/.test(raw) || n === 0) return;
+          var t0 = null, dur = 700;
+          el.textContent = '0';
+          requestAnimationFrame(function step(t) {
+            if (t0 === null) t0 = t;
+            var p = Math.min(1, (t - t0) / dur);
+            p = 1 - Math.pow(1 - p, 3); // ease-out cubic
+            el.textContent = String(Math.round(n * p));
+            if (p < 1) requestAnimationFrame(step);
+          });
+        });
+      }
+
+      // sticky table headers stick below the nav — keep --nav-h in sync with its real height
+      function setNavH() {
+        document.documentElement.style.setProperty('--nav-h', (nav ? nav.offsetHeight : 0) + 'px');
+      }
+      setNavH();
+      window.addEventListener('resize', setNavH);
+
+      // HTMX: loading feedback on the REAL submitter, duplicate-submit guard, SR announcements
+      var srStatus = document.getElementById('sr-status');
+      function announce(msg) { if (srStatus) srStatus.textContent = msg; }
+      // track the last clicked submit button (fallback when the submit event has no .submitter)
+      var lastSubmitter = null;
+      document.addEventListener('click', function (e) {
+        var b = e.target.closest && e.target.closest('button, input[type=submit]');
+        if (b && b.form) lastSubmitter = b;
+      }, true);
+      function reqButton(e) {
+        var el = e.detail && e.detail.elt;
+        if (!el || !el.matches) return null;
+        if (el.matches('button, input[type=submit]')) return el;
+        // hx-post lives on the <form>: find the button that actually submitted it,
+        // not the form's first button (approval form has Aprovar AND Reprovar)
+        var cfg = e.detail.requestConfig, ev = cfg && cfg.triggeringEvent;
+        if (ev && ev.submitter) return ev.submitter;
+        if (lastSubmitter && lastSubmitter.form === el) return lastSubmitter;
+        return el.querySelector ? el.querySelector('button, input[type=submit]') : null;
+      }
+      document.body.addEventListener('htmx:beforeRequest', function (e) {
+        var el = e.detail && e.detail.elt;
+        // one request per element at a time — blocks double-submit even with focus intact
+        if (el && el.hasAttribute && el.hasAttribute('data-inflight')) { e.preventDefault(); return; }
+        if (el && el.setAttribute) el.setAttribute('data-inflight', '');
+        var btn = reqButton(e);
+        if (btn) {
+          btn.classList.add('is-loading');
+          // aria-disabled keeps keyboard focus where it is (disabled would drop it to <body>)
+          btn.setAttribute('aria-disabled', 'true');
+          btn.setAttribute('aria-busy', 'true');
+        }
+        announce('Enviando…');
+      });
+      document.body.addEventListener('htmx:afterRequest', function (e) {
+        var el = e.detail && e.detail.elt;
+        if (el && el.removeAttribute) el.removeAttribute('data-inflight');
+        var btn = reqButton(e);
+        // guard: htmx refires afterRequest on an ancestor when the form was swapped out —
+        // never touch a button that isn't actually in a loading state
+        if (btn && btn.classList.contains('is-loading')) {
+          btn.classList.remove('is-loading');
+          btn.removeAttribute('aria-disabled');
+          btn.removeAttribute('aria-busy');
+        }
+        announce(e.detail && e.detail.successful ? 'Ação concluída.' : 'Falha na ação. Tente novamente.');
+      });
     })();
   </script>
 </body>
